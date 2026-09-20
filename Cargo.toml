@@ -6,7 +6,7 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
-repository = "https://github.com/dmauderer/merle"
+repository = "https://github.com/DanielMauderer/merle"
 authors = ["Daniel Mauderer <daniel090798@gmail.com>"]
 
 [workspace.dependencies]
