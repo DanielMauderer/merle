@@ -1,0 +1,15 @@
+[package]
+name = "merle-loader"
+description = "Folder listing, decoding and preload cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MPL-2.0"
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+merle-raw.workspace = true
+
+[lints]
+workspace = true

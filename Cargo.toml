@@ -1,0 +1,35 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+repository = "https://github.com/dmauderer/merle"
+authors = ["Daniel Mauderer <daniel090798@gmail.com>"]
+
+[workspace.dependencies]
+merle-raw = { path = "crates/merle-raw", version = "0.1.0" }
+merle-loader = { path = "crates/merle-loader", version = "0.1.0" }
+merle-core = { path = "crates/merle-core", version = "0.1.0" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+todo = "warn"
+dbg_macro = "warn"
+unwrap_used = "warn"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+
+[profile.release]
+lto = "thin"
