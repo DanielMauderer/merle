@@ -1,0 +1,47 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+# Licenses accepted for third-party dependencies. Deliberately permissive-only:
+# a copyleft dependency would contaminate the MPL library crates, so it must
+# fail here rather than pass unnoticed.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+# No dependencies yet, so every entry in `allow` is unused. Re-enable this
+# (drop the line, or set it to "warn") once the workspace has real deps, to
+# catch allowances that are no longer needed.
+unused-allowed-license = "allow"
+
+# merle's own crates — see README. Scoped here instead of in `allow` so these
+# licenses stay permitted for us and forbidden for our dependencies.
+exceptions = [
+  { name = "merle-raw", allow = ["MPL-2.0"] },
+  { name = "merle-loader", allow = ["MPL-2.0"] },
+  { name = "merle-core", allow = ["MPL-2.0"] },
+  { name = "merle-view", allow = ["GPL-3.0-or-later"] },
+  { name = "merle-app", allow = ["GPL-3.0-or-later"] },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

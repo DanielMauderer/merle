@@ -1,0 +1,17 @@
+[package]
+name = "merle-app"
+description = "The merle culler binary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+merle-raw.workspace = true
+merle-loader.workspace = true
+merle-core.workspace = true
+
+[lints]
+workspace = true
