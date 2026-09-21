@@ -13,6 +13,7 @@ authors = ["Daniel Mauderer <daniel090798@gmail.com>"]
 merle-raw = { path = "crates/merle-raw", version = "0.1.0" }
 merle-loader = { path = "crates/merle-loader", version = "0.1.0" }
 merle-core = { path = "crates/merle-core", version = "0.1.0" }
+winit = "0.30.13"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

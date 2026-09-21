@@ -11,6 +11,8 @@ authors.workspace = true
 [dependencies]
 merle-raw.workspace = true
 merle-loader.workspace = true
+winit.workspace = true
+softbuffer = "0.4.8"
 
 [lints]
 workspace = true
