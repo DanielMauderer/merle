@@ -11,7 +11,7 @@ use std::num::NonZeroU32;
 use std::path::Path;
 use std::rc::Rc;
 
-use image::{DynamicImage, GenericImageView, ImageBuffer, Pixel, Rgb};
+use image::{DynamicImage, GenericImageView, Pixel};
 use softbuffer::{Context, Surface};
 use winit::application::ApplicationHandler;
 use winit::error::EventLoopError;
@@ -32,6 +32,10 @@ struct App {
 }
 
 impl App {
+    pub fn new(path: &Path) -> Self {
+        Self { view: Option::None, image: image::open(path).unwrap() }
+    }
+
     /// Paint one frame: a vertical gradient, so we can see that pixels land.
     fn draw(&mut self) {
         let Some(view) = self.view.as_mut() else {
@@ -48,8 +52,7 @@ impl App {
 
         let image_buffer = self
             .image
-            .resize(width.get(), height.get(), image::imageops::FilterType::Nearest)
-            .buffer_with_dimensions(width.get(), height.get());
+            .resize(width.get(), height.get(), image::imageops::FilterType::Gaussian);
         if let Err(err) = view.surface.resize(width, height) {
             eprintln!("failed to resize surface: {err}");
             return;
@@ -63,15 +66,21 @@ impl App {
             }
         };
 
-        // softbuffer hands us `width * height` pixels in 0RGB order.
+        // softbuffer h
+        // ands us `width * height` pixels in 0RGB order.
         let width = width.get() as usize;
         for (index, buffer_pixel) in buffer.iter_mut().enumerate() {
-            let x = index % width;
-            let y = index / width;
-            let pixel = image_buffer.get_pixel(x as u32, y as u32).to_rgb();
-            let red = pixel.0[0]as u32;
-            let green = pixel.0[1] as u32;
-            let blue = pixel.0[2] as u32;
+            let x = (index % width) as u32;
+            let y = (index / width) as u32;
+            if x >= image_buffer.width() || y >= image_buffer.height(){
+                *buffer_pixel = 0;
+                continue;
+            }
+            let pixel = image_buffer.get_pixel(x, y).to_rgb().0;
+            let red = u32::from(pixel[0]);
+            let green = u32::from(pixel[1]);
+            let blue = u32::from(pixel[2]);
+
             *buffer_pixel = (red << 16) | (green << 8) | blue;
         }
 
@@ -143,8 +152,6 @@ fn main() -> Result<(), EventLoopError> {
     // input, and uses significantly less power/CPU time than ControlFlow::Poll.
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let mut app = App::default();
-    let im = image::open(Path::new(&from)).unwrap();
-    app.image = im;
+    let mut app = App::new(Path::new(&from));
     event_loop.run_app(&mut app)
 }
