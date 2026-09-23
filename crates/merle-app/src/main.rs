@@ -7,6 +7,23 @@
 
 //! The merle culler.
 
+use tracing::info;
+use tracing_subscriber::EnvFilter;
+
+/// Install the tracing subscriber; `RUST_LOG` overrides the default filter.
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("merle_app=debug,merle_raw=debug,merle_loader=debug,merle_core=debug,warn")
+    });
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 fn main() {
-    println!("merle-app: not implemented yet");
+    init_tracing();
+    info!("merle-app: not implemented yet");
 }
