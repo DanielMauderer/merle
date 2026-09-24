@@ -14,7 +14,6 @@ use std::time::Instant;
 
 use image::{DynamicImage, GenericImageView, Pixel};
 use softbuffer::{Context, Surface};
-use tracing::field::debug;
 use tracing::{debug, error, info, instrument, trace};
 use tracing_subscriber::EnvFilter;
 use winit::application::ApplicationHandler;
@@ -54,10 +53,10 @@ struct App {
 
 impl App {
     #[instrument(skip_all, fields(path = %path.display()))]
-    pub fn new(path: &Path) -> Self {
+    fn new(path: &Path) -> Self {
         let image = image::open(path).unwrap();
         info!(width = image.width(), height = image.height(), "loaded image");
-        Self { view: Option::None, image }
+        Self { view: None, image }
     }
 
     /// Paint one frame: the image scaled to the current window size.
@@ -79,7 +78,7 @@ impl App {
         };
         let scale_start = Instant::now();
         let image_buffer =
-            self.image.resize(width.get(), height.get(), image::imageops::FilterType::Triangle);
+            self.image.resize(width.get(), height.get(), image::imageops::FilterType::Gaussian);
         let scale_time = scale_start.elapsed();
         trace!(
             window_width = width.get(),
@@ -108,15 +107,23 @@ impl App {
         // softbuffer h
         // ands us `width * height` pixels in 0RGB order.
         let width = width.get() as usize;
+        let height = height.get() as usize;
         let fill_start = Instant::now();
+        let width_gap = ((width - image_buffer.width() as usize) / 2) as u32;
+        let height_gap = ((height - image_buffer.height() as usize) / 2) as u32;
+        debug!("w_g: {width_gap} | h_g: {height_gap}");
         for (index, buffer_pixel) in buffer.iter_mut().enumerate() {
             let x = (index % width) as u32;
             let y = (index / width) as u32;
-            if x >= image_buffer.width() || y >= image_buffer.height() {
+            if x >= image_buffer.width() + width_gap
+                || y >= image_buffer.height() + height_gap
+                || x <= width_gap as u32
+                || y <= height_gap as u32
+            {
                 *buffer_pixel = 0;
                 continue;
             }
-            let pixel = image_buffer.get_pixel(x, y).to_rgb().0;
+            let pixel = image_buffer.get_pixel(x - width_gap, y - height_gap).to_rgb().0;
             let red = u32::from(pixel[0]);
             let green = u32::from(pixel[1]);
             let blue = u32::from(pixel[2]);

@@ -13,9 +13,10 @@ merle-raw.workspace = true
 merle-loader.workspace = true
 winit.workspace = true
 softbuffer = "0.4.8"
-image ="0.25.10"
 tracing.workspace = true
 tracing-subscriber.workspace = true
+image.workspace = true
+rawler.workspace = true
 
 [lints]
 workspace = true

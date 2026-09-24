@@ -1,8 +1,7 @@
 # merle
 
 A RAW photo culler: browse a shoot folder fast, keep or reject, and persist the
-decisions. Nothing is implemented yet — this repository currently holds the
-workspace skeleton only.
+decisions. 
 
 ## Crates
 
