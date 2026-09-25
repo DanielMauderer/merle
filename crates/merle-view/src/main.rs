@@ -13,6 +13,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use image::{DynamicImage, GenericImageView, Pixel};
+use rawler::decoders::RawLoader;
 use softbuffer::{Context, Surface};
 use tracing::{debug, error, info, instrument, trace};
 use tracing_subscriber::EnvFilter;
@@ -52,10 +53,7 @@ struct App {
 }
 
 impl App {
-    #[instrument(skip_all, fields(path = %path.display()))]
-    fn new(path: &Path) -> Self {
-        let image = image::open(path).unwrap();
-        info!(width = image.width(), height = image.height(), "loaded image");
+    fn new(image: DynamicImage) -> Self {
         Self { view: None, image }
     }
 
@@ -78,7 +76,7 @@ impl App {
         };
         let scale_start = Instant::now();
         let image_buffer =
-            self.image.resize(width.get(), height.get(), image::imageops::FilterType::Gaussian);
+            self.image.resize(width.get(), height.get(), image::imageops::FilterType::Nearest);
         let scale_time = scale_start.elapsed();
         trace!(
             window_width = width.get(),
@@ -104,31 +102,31 @@ impl App {
         };
         let acquire_time = acquire_start.elapsed();
 
-        // softbuffer h
-        // ands us `width * height` pixels in 0RGB order.
-        let width = width.get() as usize;
-        let height = height.get() as usize;
+        // softbuffer hands us `width * height` pixels in 0RGB order.
+        let width = width.get();
+        let height = height.get();
         let fill_start = Instant::now();
-        let width_gap = ((width - image_buffer.width() as usize) / 2) as u32;
-        let height_gap = ((height - image_buffer.height() as usize) / 2) as u32;
+        let width_gap = (width - image_buffer.width()) / 2;
+        let height_gap = (height - image_buffer.height()) / 2;
         debug!("w_g: {width_gap} | h_g: {height_gap}");
-        for (index, buffer_pixel) in buffer.iter_mut().enumerate() {
-            let x = (index % width) as u32;
-            let y = (index / width) as u32;
-            if x >= image_buffer.width() + width_gap
-                || y >= image_buffer.height() + height_gap
-                || x <= width_gap as u32
-                || y <= height_gap as u32
-            {
-                *buffer_pixel = 0;
-                continue;
-            }
-            let pixel = image_buffer.get_pixel(x - width_gap, y - height_gap).to_rgb().0;
-            let red = u32::from(pixel[0]);
-            let green = u32::from(pixel[1]);
-            let blue = u32::from(pixel[2]);
+        let rows = buffer.chunks_exact_mut(width as usize);
+        for (y, row) in (0..height).zip(rows) {
+            for (x, buffer_pixel) in (0..width).zip(row.iter_mut()) {
+                if x >= image_buffer.width() + width_gap
+                    || y >= image_buffer.height() + height_gap
+                    || x <= width_gap
+                    || y <= height_gap
+                {
+                    *buffer_pixel = 0;
+                    continue;
+                }
+                let pixel = image_buffer.get_pixel(x - width_gap, y - height_gap).to_rgb().0;
+                let red = u32::from(pixel[0]);
+                let green = u32::from(pixel[1]);
+                let blue = u32::from(pixel[2]);
 
-            *buffer_pixel = (red << 16) | (green << 8) | blue;
+                *buffer_pixel = (red << 16) | (green << 8) | blue;
+            }
         }
         let fill_time = fill_start.elapsed();
 
@@ -206,9 +204,8 @@ fn main() -> Result<(), EventLoopError> {
     init_tracing();
 
     let event_loop = EventLoop::new()?;
-    let from = if env::args_os().count() == 2 {
-        env::args_os().nth(1).unwrap()
-    } else {
+    let mut args = env::args_os().skip(1);
+    let (Some(from), None) = (args.next(), args.next()) else {
         error!("usage: merle-view <image path>");
         std::process::exit(1);
     };
@@ -217,7 +214,27 @@ fn main() -> Result<(), EventLoopError> {
     // input, and uses significantly less power/CPU time than ControlFlow::Poll.
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let mut app = App::new(Path::new(&from));
+    let mut app = match open(Path::new(&from)) {
+        Ok(image) => {
+            info!(width = image.width(), height = image.height(), "loaded image");
+            App::new(image)
+        }
+        Err(err) => {
+            error!(%err, "failed to load image");
+            std::process::exit(1);
+        }
+    };
     info!("entering event loop");
     event_loop.run_app(&mut app)
+}
+
+fn open(path: &Path) -> Result<DynamicImage, &str>{
+    let loader = rawler::RawLoader::new();
+    let source = rawler::rawsource::RawSource::new(path).unwrap();
+    let decoder = loader.get_decoder(&source).unwrap();
+    let image = decoder.preview_image(&source, &rawler::decoders::RawDecodeParams::default());
+    match image{
+        Ok(Some(image)) => Ok(image),
+        _ => Err("failed to load"),
+    }
 }
