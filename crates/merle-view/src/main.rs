@@ -8,15 +8,19 @@
 //! Minimal image viewer.
 use std::env;
 use std::path::Path;
+use std::thread::sleep;
+use std::time::Duration;
 
 use image::DynamicImage;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
+use winit::platform::wayland::EventLoopBuilderExtWayland;
 
 use crate::sb::App;
 pub mod sb;
+pub mod wgp;
 /// Install the tracing subscriber.
 ///
 /// `RUST_LOG` wins when it is set; otherwise we default to debug for our own
@@ -34,9 +38,25 @@ fn init_tracing() {
         .init();
 }
 
-fn main() -> Result<(), EventLoopError> {
+#[tokio::main]
+async fn main() {
     init_tracing();
+    let handle_sb = tokio::spawn(async {
+        start_softbuffer()
+    });    
+    let handle_wgp = tokio::spawn(async {
+        start_softbuffer()
+    });
+    handle_sb.await.unwrap();
+    handle_wgp.await.unwrap();
 
+    loop {
+        sleep(Duration::from_secs(1));
+    }
+}
+
+fn start_softbuffer() -> Result<(), EventLoopError> {
+    let event_loop = EventLoop::<()>::with_user_event().with_any_thread(true).build()?;
     let event_loop = EventLoop::new()?;
     let mut args = env::args_os().skip(1);
     let (Some(from), None) = (args.next(), args.next()) else {
