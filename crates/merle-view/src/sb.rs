@@ -11,18 +11,20 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
 /// A window plus the CPU-side pixel buffer we present into it.
+#[derive(Debug)]
 struct View {
     window: Rc<Window>,
     surface: Surface<Rc<Window>, Rc<Window>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct App {
     view: Option<View>,
     image: DynamicImage,
 }
 
 impl App {
+    #[must_use]
     pub fn new(image: DynamicImage) -> Self {
         Self { view: None, image }
     }

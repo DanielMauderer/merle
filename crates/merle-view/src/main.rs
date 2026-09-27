@@ -9,7 +9,7 @@
 use std::env;
 use std::path::Path;
 
-use image::{DynamicImage, GenericImageView};
+use image::DynamicImage;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
@@ -34,8 +34,6 @@ fn init_tracing() {
         .init();
 }
 
-
-
 fn main() -> Result<(), EventLoopError> {
     init_tracing();
 
@@ -50,27 +48,21 @@ fn main() -> Result<(), EventLoopError> {
     // input, and uses significantly less power/CPU time than ControlFlow::Poll.
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let mut app = match open(Path::new(&from)) {
-        Ok(image) => {
-            info!(width = image.width(), height = image.height(), "loaded image");
-            App::new(image)
-        }
-        Err(err) => {
-            error!(%err, "failed to load image");
-            std::process::exit(1);
-        }
-    };
+    let image = open(Path::new(&from));
+    info!(width = image.width(), height = image.height(), "loaded image");
+    let mut app = App::new(image);
+
     info!("entering event loop");
     event_loop.run_app(&mut app)
 }
 
-fn open(path: &Path) -> Result<DynamicImage, &str>{
+fn open(path: &Path) -> DynamicImage {
     let loader = rawler::RawLoader::new();
-    let source = rawler::rawsource::RawSource::new(path).unwrap();
-    let decoder = loader.get_decoder(&source).unwrap();
-    let image = decoder.preview_image(&source, &rawler::decoders::RawDecodeParams::default());
-    match image{
-        Ok(Some(image)) => Ok(image),
-        _ => Err("failed to load"),
-    }
+    let source = rawler::rawsource::RawSource::new(path).expect("cant read source");
+
+    let decoder = loader.get_decoder(&source).expect("cant decode source");
+    decoder
+        .preview_image(&source, &rawler::decoders::RawDecodeParams::default())
+        .expect("error extracting preview image")
+        .expect("source has no preview image")
 }
