@@ -7,21 +7,13 @@
 
 //! Minimal image viewer.
 use std::env;
-use std::num::NonZeroU32;
 use std::path::Path;
-use std::rc::Rc;
-use std::time::Instant;
 
-use image::{DynamicImage, GenericImageView, Pixel};
-use rawler::decoders::RawLoader;
-use softbuffer::{Context, Surface};
-use tracing::{debug, error, info, instrument, trace};
+use image::{DynamicImage, GenericImageView};
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
-use winit::application::ApplicationHandler;
 use winit::error::EventLoopError;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowId};
+use winit::event_loop::{ControlFlow, EventLoop};
 
 use crate::sb::App;
 pub mod sb;
