@@ -15,7 +15,6 @@ use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
 
-use crate::sb::App;
 pub mod sb;
 pub mod wgp;
 /// Install the tracing subscriber.
@@ -55,7 +54,7 @@ fn start_app() -> Result<(), EventLoopError> {
 
     let image = open(Path::new(&from));
     info!(width = image.width(), height = image.height(), "loaded image");
-    let mut app = App::new(image);
+    let mut app = wgp::App::new(image);
 
     info!("entering event loop");
     event_loop.run_app(&mut app)
