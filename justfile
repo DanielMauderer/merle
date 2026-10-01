@@ -45,3 +45,7 @@ app *ARGS:
 # Run the minimal viewer
 view *ARGS:
     cargo run -p merle-view -- {{ARGS}}
+
+# Download CC0 Canon CR2/CR3 sample RAWs into testdata/raw
+samples *ARGS:
+    ./scripts/fetch-samples.sh {{ARGS}}

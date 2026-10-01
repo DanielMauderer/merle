@@ -50,6 +50,13 @@ just test       # nextest
 just ci         # everything CI runs: fmt-check, lint, test, deny, typos
 ```
 
+## Sample RAWs
+
+`just samples` downloads a few Canon RAWs (EOS R7 CR3 RAW + C-RAW, EOS 7D CR2,
+EOS 100D CR2, ~94 MB) from [raw.pixls.us](https://raw.pixls.us) into
+`testdata/raw/` (git-ignored). The files are CC0 1.0 (public domain) and are
+checked against pinned sha256 sums; reruns skip files that are already valid.
+
 ## License
 
 Copyright (C) 2026 Daniel Mauderer.
