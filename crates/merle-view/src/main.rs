@@ -23,15 +23,7 @@ pub mod wgp;
 /// crates and warnings from everything else, so `bacon view` is useful with no
 /// environment plumbing.
 fn init_tracing() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new("merle_view=debug,merle_raw=debug,merle_loader=debug,warn")
-    });
-
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(true)
-        .with_writer(std::io::stderr)
-        .init();
+    env_logger::init();
 }
 
 #[tokio::main]
@@ -41,7 +33,7 @@ async fn main() {
 }
 
 fn start_app() -> Result<(), EventLoopError> {
-    let event_loop = EventLoop::new()?;
+    let event_loop = EventLoop::with_user_event().build()?;
     let mut args = env::args_os().skip(1);
     let (Some(from), None) = (args.next(), args.next()) else {
         error!("usage: merle-view <image path>");
@@ -55,7 +47,6 @@ fn start_app() -> Result<(), EventLoopError> {
     let image = open(Path::new(&from));
     info!(width = image.width(), height = image.height(), "loaded image");
     let mut app = wgp::App::new(image);
-
     info!("entering event loop");
     event_loop.run_app(&mut app)
 }

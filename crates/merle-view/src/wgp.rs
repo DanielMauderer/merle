@@ -1,199 +1,219 @@
 use std::sync::Arc;
 
 use image::DynamicImage;
+use wgpu::{BackendOptions, InstanceFlags, MemoryBudgetThresholds};
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{KeyEvent, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, OwnedDisplayHandle},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
-
-struct State {
-    instance: wgpu::Instance,
-    window: Arc<Window>,
+// This will store the state of our game
+#[derive(Debug)]
+pub struct State {
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    size: winit::dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface<'static>,
-    surface_format: wgpu::TextureFormat,
+    config: wgpu::SurfaceConfiguration,
+    is_surface_configured: bool,
+    window: Arc<Window>,
+    scrollstate: f64,
 }
 
 impl State {
-    async fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> State {
+    // We don't need this to be async right now,
+    // but we will in the next tutorial
+    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Self {
+        let size = window.inner_size();
+
+        // The instance is a handle to our GPU
+        // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
             Box::new(display),
         ));
+        let surface = instance.create_surface(window.clone()).expect("cant create surface");
+
         let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+                apply_limit_buckets: true,
+            })
             .await
-            .unwrap();
+            .expect("cant create adapter");
+
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: wgpu::MemoryHints::default(),
+                trace: wgpu::Trace::Off,
+            })
             .await
-            .unwrap();
+            .expect("cant create device/queue");
 
-        let size = window.inner_size();
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(surface_caps.formats[0]);
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+            color_space: wgpu::SurfaceColorSpace::Auto,
+        };
 
-        let surface = instance.create_surface(window.clone()).unwrap();
-        let cap = surface.get_capabilities(&adapter);
-        let surface_format = cap.formats[0];
-
-        let state = State {
-            instance,
-            window,
+        Self {
+            surface,
             device,
             queue,
-            size,
-            surface,
-            surface_format,
-        };
-
-        // Configure surface for the first time
-        state.configure_surface();
-
-        state
+            config,
+            is_surface_configured: false,
+            window,
+            scrollstate: 0.0,
+        }
     }
 
-    fn get_window(&self) -> &Window {
-        &self.window
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width > 0 && height > 0 {
+            self.config.width = width;
+            self.config.height = height;
+            self.surface.configure(&self.device, &self.config);
+            self.is_surface_configured = true;
+        }
     }
 
-    fn configure_surface(&self) {
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.surface_format,
-            color_space: wgpu::SurfaceColorSpace::Auto,
-            // Request compatibility with the sRGB-format texture view we‘re going to create later.
-            view_formats: vec![self.surface_format.add_srgb_suffix()],
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: self.size.width,
-            height: self.size.height,
-            desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::AutoVsync,
-        };
-        self.surface.configure(&self.device, &surface_config);
+    pub fn scroll(&mut self, delta: MouseScrollDelta) {
+        match delta {
+            MouseScrollDelta::LineDelta(_, x) => self.scrollstate += x as f64,
+            MouseScrollDelta::PixelDelta(x) => self.scrollstate += x.x,
+        }
     }
 
-    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        self.size = new_size;
+    pub fn render(&mut self) {
+        self.window.request_redraw();
 
-        // reconfigure the surface
-        self.configure_surface();
-    }
+        // We can't render unless the surface is configured
+        if !self.is_surface_configured {
+            return;
+        }
 
-    fn render(&mut self) {
-        // Create texture view.
-        // NOTE: We must handle Timeout because the surface may be unavailable
-        // (e.g., when the window is occluded on macOS).
-        let surface_texture = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(texture) => texture,
-            wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => return,
-            wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
-                drop(texture);
-                self.configure_surface();
+        let output = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                // Skip this frame
                 return;
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.configure_surface();
+                self.surface.configure(&self.device, &self.config);
                 return;
-            }
-            wgpu::CurrentSurfaceTexture::Validation => {
-                unreachable!("No error scope registered, so validation errors will panic")
             }
             wgpu::CurrentSurfaceTexture::Lost => {
-                self.surface = self.instance.create_surface(self.window.clone()).unwrap();
-                self.configure_surface();
-                return;
+                // You could recreate the devices and all resources
+                // created with it here, but we'll just bail
+                panic!("Lost device");
             }
         };
-        let texture_view = surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor {
-                // Without add_srgb_suffix() the image we will be working with
-                // might not be "gamma correct".
-                format: Some(self.surface_format.add_srgb_suffix()),
-                ..Default::default()
-            });
-
-        // Renders a GREEN screen
-        let mut encoder = self.device.create_command_encoder(&Default::default());
-        // Create the renderpass which will clear the screen.
-        let renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &texture_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
+        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
         });
+        {
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: self.scrollstate / 100.0,
+                            g: self.scrollstate / 100.0,
+                            b: self.scrollstate / 100.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+        }
+        // submit will accept anything that implements IntoIter
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.present(output);
+    }
 
-        // If you wanted to call any drawing commands, they would go here.
-        // End the renderpass.
-        drop(renderpass);
-
-        // Submit the command in the queue to execute
-        self.queue.submit([encoder.finish()]);
-        self.window.pre_present_notify();
-        self.queue.present(surface_texture);
+    fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        if let (KeyCode::Escape, true) = (code, is_pressed) {
+            event_loop.exit();
+        }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct App {
     state: Option<State>,
 }
 
 impl App {
-    pub fn new(_: DynamicImage) -> Self{
-        App::default()
-    } 
+    #[must_use]
+    pub fn new(_: DynamicImage) -> Self {
+        Self { state: None }
+    }
 }
-
-impl ApplicationHandler for App {
+impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Create window object
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
+        #[allow(unused_mut)]
+        let mut window_attributes = Window::default_attributes();
 
-        let state = pollster::block_on(State::new(
-            event_loop.owned_display_handle(),
-            window.clone(),
-        ));
-        self.state = Some(state);
+        let window =
+            Arc::new(event_loop.create_window(window_attributes).expect("cant create window"));
 
-        window.request_redraw();
+        self.state =
+            Some(pollster::block_on(State::new(window.clone(), event_loop.owned_display_handle())));
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let state = self.state.as_mut().unwrap();
+    #[allow(unused_mut)]
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
+        self.state = Some(event);
+    }
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        let Some(state) = &mut self.state else { return };
+
         match event {
-            WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                state.render();
-                // Emits a new redraw requested event.
-                state.get_window().request_redraw();
-            }
-            WindowEvent::Resized(size) => {
-                // Reconfigures the size of the surface. We do not re-render
-                // here as this event is always followed up by redraw request.
-                state.resize(size);
-            }
-            _ => (),
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => state.resize(size.width, size.height),
+            WindowEvent::RedrawRequested => state.render(),
+            WindowEvent::MouseWheel{device_id: _, delta, phase: _} => state.scroll(delta),
+            WindowEvent::KeyboardInput {
+                event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
+                ..
+            } => state.handle_key(event_loop, code, key_state.is_pressed()),
+            _ => {}
         }
     }
+    // ...
 }
-

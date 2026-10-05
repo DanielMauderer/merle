@@ -9,12 +9,13 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
-      # winit/softbuffer dlopen these at runtime, so they must be on the
+      # winit/wgpu dlopen these at runtime, so they must be on the
       # library path rather than just available at link time.
       runtimeLibs = with pkgs; [
         wayland
         libxkbcommon
         libGL
+        vulkan-loader
         libX11
         libxcursor
         libxi
