@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use image::DynamicImage;
-use wgpu::{BackendOptions, InstanceFlags, MemoryBudgetThresholds};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, MouseScrollDelta, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, OwnedDisplayHandle},
+    event_loop::{ActiveEventLoop, OwnedDisplayHandle},
     keyboard::{KeyCode, PhysicalKey},
-    window::{Window, WindowId},
+    window::Window,
 };
 // This will store the state of our game
 #[derive(Debug)]
@@ -207,7 +206,7 @@ impl ApplicationHandler<State> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
             WindowEvent::RedrawRequested => state.render(),
-            WindowEvent::MouseWheel{device_id: _, delta, phase: _} => state.scroll(delta),
+            WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => state.scroll(delta),
             WindowEvent::KeyboardInput {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..

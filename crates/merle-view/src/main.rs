@@ -11,7 +11,6 @@ use std::path::Path;
 
 use image::DynamicImage;
 use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
 
