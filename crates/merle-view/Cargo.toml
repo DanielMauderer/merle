@@ -20,6 +20,7 @@ rawler.workspace = true
 wgpu.workspace = true
 pollster.workspace = true
 tokio.workspace = true
+bytemuck.workspace = true
 
 [lints]
 workspace = true
