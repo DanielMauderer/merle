@@ -11,6 +11,7 @@ use std::path::Path;
 
 use image::DynamicImage;
 use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -22,7 +23,15 @@ pub mod wgp;
 /// crates and warnings from everything else, so `bacon view` is useful with no
 /// environment plumbing.
 fn init_tracing() {
-    env_logger::init();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("merle_view=debug,merle_raw=debug,merle_loader=debug,warn")
+    });
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_writer(std::io::stderr)
+        .init();
 }
 
 #[tokio::main]
@@ -50,7 +59,7 @@ fn start_app() -> Result<(), EventLoopError> {
     event_loop.run_app(&mut app)
 }
 
-fn open(path: &Path) -> DynamicImage {
+pub fn open(path: &Path) -> DynamicImage {
     let loader = rawler::RawLoader::new();
     let source = rawler::rawsource::RawSource::new(path).expect("cant read source");
 

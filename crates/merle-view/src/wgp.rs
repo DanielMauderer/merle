@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use image::DynamicImage;
+use tracing::info;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, MouseScrollDelta, WindowEvent},
@@ -8,6 +9,7 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
+
 // This will store the state of our game
 #[derive(Debug)]
 pub struct State {
@@ -18,6 +20,7 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     scrollstate: f64,
+    render_pipeline: wgpu::RenderPipeline,
 }
 
 impl State {
@@ -55,6 +58,18 @@ impl State {
             .await
             .expect("cant create device/queue");
 
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[],
+                immediate_size: 0,
+            });
+
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps
             .formats
@@ -74,6 +89,49 @@ impl State {
             color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[],                 // 2.
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                // 3.
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    // 4.
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: None, // 1.
+            multisample: wgpu::MultisampleState {
+                count: 1,                         // 2.
+                mask: !0,                         // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },
+            multiview_mask: None, // 5.
+            cache: None,          // 6.
+        });
+
         Self {
             surface,
             device,
@@ -82,6 +140,7 @@ impl State {
             is_surface_configured: false,
             window,
             scrollstate: 0.0,
+            render_pipeline,
         }
     }
 
@@ -96,9 +155,15 @@ impl State {
 
     pub fn scroll(&mut self, delta: MouseScrollDelta) {
         match delta {
-            MouseScrollDelta::LineDelta(_, x) => self.scrollstate += x as f64,
+            MouseScrollDelta::LineDelta(_, x) => self.scrollstate += f64::from(x),
             MouseScrollDelta::PixelDelta(x) => self.scrollstate += x.x,
         }
+        match self.scrollstate {
+            ..0.0 => self.scrollstate = 0.0,
+            (100.0..) => self.scrollstate = 100.0,
+            _ => {}
+        }
+        info!(scroll = self.scrollstate);
     }
 
     pub fn render(&mut self) {
@@ -110,8 +175,8 @@ impl State {
         }
 
         let output = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Success(surface_texture)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
             wgpu::CurrentSurfaceTexture::Timeout
             | wgpu::CurrentSurfaceTexture::Occluded
             | wgpu::CurrentSurfaceTexture::Validation => {
@@ -133,35 +198,42 @@ impl State {
             label: Some("Render Encoder"),
         });
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: self.scrollstate / 100.0,
-                            g: self.scrollstate / 100.0,
-                            b: self.scrollstate / 100.0,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
+                color_attachments: &[
+                    // This is what @location(0) in the fragment shader targets
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: self.scrollstate / 100.0,
+                                g: self.scrollstate / 100.0,
+                                b: self.scrollstate / 100.0,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                ],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
                 timestamp_writes: None,
                 multiview_mask: None,
             });
+
+            // NEW!
+            render_pass.set_pipeline(&self.render_pipeline); // 2.
+            render_pass.draw(0..3, 0..1); // 3.
         }
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
         self.queue.present(output);
     }
 
-    fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if let (KeyCode::Escape, true) = (code, is_pressed) {
+    fn handle_key(event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        if let (KeyCode::KeyQ, true) = (code, is_pressed) {
             event_loop.exit();
         }
     }
@@ -178,6 +250,7 @@ impl App {
         Self { state: None }
     }
 }
+
 impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
@@ -210,7 +283,7 @@ impl ApplicationHandler<State> for App {
             WindowEvent::KeyboardInput {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..
-            } => state.handle_key(event_loop, code, key_state.is_pressed()),
+            } => State::handle_key(event_loop, code, key_state.is_pressed()),
             _ => {}
         }
     }
