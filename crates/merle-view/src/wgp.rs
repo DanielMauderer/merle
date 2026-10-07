@@ -1,4 +1,4 @@
-use std::{mem, sync::Arc};
+use std::sync::Arc;
 
 use image::{DynamicImage, GenericImageView};
 use tracing::info;
@@ -32,7 +32,7 @@ impl Vertex {
                 wgpu::VertexAttribute {
                     offset: size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2, // NEW!
+                    format: wgpu::VertexFormat::Float32x2,
                 },
             ],
         }
@@ -47,6 +47,36 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 2, 1, 2, 3];
 
+/// Padded to 16 bytes to match WGSL uniform layout and leave room for zoom/offset.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct ImageUniform {
+    scale: [f32; 2],
+    _pad: [f32; 2],
+}
+
+impl ImageUniform {
+    fn new(window: (u32, u32), image: (u32, u32)) -> Self {
+        Self { scale: aspect_scale(window, image), _pad: [0.0; 2] }
+    }
+}
+
+/// Scale factors that fit an image into the window while keeping its aspect ratio.
+fn aspect_scale((win_w, win_h): (u32, u32), (img_w, img_h): (u32, u32)) -> [f32; 2] {
+    if win_w == 0 || win_h == 0 || img_w == 0 || img_h == 0 {
+        return [1.0, 1.0];
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let window_aspect = win_w as f32 / win_h as f32;
+    #[allow(clippy::cast_precision_loss)]
+    let image_aspect = img_w as f32 / img_h as f32;
+    if window_aspect > image_aspect {
+        [image_aspect / window_aspect, 1.0]
+    } else {
+        [1.0, window_aspect / image_aspect]
+    }
+}
+
 #[derive(Debug)]
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -60,6 +90,9 @@ pub struct State {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     diffuse_bind_group: wgpu::BindGroup, // NEW!
+    image_dimensions: (u32, u32),
+    image_uniform_buffer: wgpu::Buffer,
+    image_uniform_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -188,10 +221,43 @@ impl State {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
+
+        let image_uniform = ImageUniform::new((size.width, size.height), dimensions);
+        let image_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Image Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[image_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let image_uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("image_uniform_bind_group_layout"),
+            });
+        let image_uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &image_uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: image_uniform_buffer.as_entire_binding(),
+            }],
+            label: Some("image_uniform_bind_group"),
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[Some(&texture_bind_group_layout)], // NEW!
+                bind_group_layouts: &[
+                    Some(&texture_bind_group_layout),
+                    Some(&image_uniform_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
         let diffuse_texture_view =
@@ -272,6 +338,9 @@ impl State {
             vertex_buffer,
             index_buffer,
             diffuse_bind_group,
+            image_dimensions: dimensions,
+            image_uniform_buffer,
+            image_uniform_bind_group,
         }
     }
 
@@ -281,6 +350,13 @@ impl State {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+
+            let image_uniform = ImageUniform::new((width, height), self.image_dimensions);
+            self.queue.write_buffer(
+                &self.image_uniform_buffer,
+                0,
+                bytemuck::cast_slice(&[image_uniform]),
+            );
         }
     }
 
@@ -351,6 +427,7 @@ impl State {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.image_uniform_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16); // 1.
             render_pass.draw_indexed(0..n_index, 0, 0..1); // 2.
@@ -417,5 +494,25 @@ impl ApplicationHandler<State> for App {
             } => State::handle_key(event_loop, code, key_state.is_pressed()),
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::aspect_scale;
+
+    #[test]
+    fn wide_window_shrinks_x() {
+        assert_eq!(aspect_scale((200, 100), (100, 100)), [0.5, 1.0]);
+    }
+
+    #[test]
+    fn tall_window_shrinks_y() {
+        assert_eq!(aspect_scale((100, 200), (100, 100)), [1.0, 0.5]);
+    }
+
+    #[test]
+    fn matching_aspect_is_identity() {
+        assert_eq!(aspect_scale((1920, 1080), (3840, 2160)), [1.0, 1.0]);
     }
 }
