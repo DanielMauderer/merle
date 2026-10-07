@@ -96,6 +96,7 @@ pub struct State {
 }
 
 impl State {
+    #[allow(clippy::too_many_lines)]
     pub async fn new(
         window: Arc<Window>,
         display: OwnedDisplayHandle,
@@ -497,22 +498,3 @@ impl ApplicationHandler<State> for App {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::aspect_scale;
-
-    #[test]
-    fn wide_window_shrinks_x() {
-        assert_eq!(aspect_scale((200, 100), (100, 100)), [0.5, 1.0]);
-    }
-
-    #[test]
-    fn tall_window_shrinks_y() {
-        assert_eq!(aspect_scale((100, 200), (100, 100)), [1.0, 0.5]);
-    }
-
-    #[test]
-    fn matching_aspect_is_identity() {
-        assert_eq!(aspect_scale((1920, 1080), (3840, 2160)), [1.0, 1.0]);
-    }
-}

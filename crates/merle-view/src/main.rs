@@ -59,6 +59,7 @@ fn start_app() -> Result<(), EventLoopError> {
     event_loop.run_app(&mut app)
 }
 
+#[must_use]
 pub fn open(path: &Path) -> DynamicImage {
     let loader = rawler::RawLoader::new();
     let source = rawler::rawsource::RawSource::new(path).expect("cant read source");
