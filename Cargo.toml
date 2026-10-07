@@ -10,9 +10,9 @@ repository = "https://github.com/DanielMauderer/merle"
 authors = ["Daniel Mauderer <daniel090798@gmail.com>"]
 
 [workspace.dependencies]
-merle-raw = { path = "crates/merle-raw", version = "0.1.0" }
+merle-photo = { path = "crates/merle-photo", version = "0.1.0" }
 merle-loader = { path = "crates/merle-loader", version = "0.1.0" }
-merle-core = { path = "crates/merle-core", version = "0.1.0" }
+merle-cull = { path = "crates/merle-cull", version = "0.1.0" }
 winit = "0.30.13"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

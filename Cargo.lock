@@ -1525,26 +1525,26 @@ dependencies = [
 name = "merle-app"
 version = "0.1.0"
 dependencies = [
- "merle-core",
+ "merle-cull",
  "merle-loader",
- "merle-raw",
+ "merle-photo",
  "tracing",
  "tracing-subscriber",
 ]
 
 [[package]]
-name = "merle-core"
+name = "merle-cull"
 version = "0.1.0"
 
 [[package]]
 name = "merle-loader"
 version = "0.1.0"
 dependencies = [
- "merle-raw",
+ "merle-photo",
 ]
 
 [[package]]
-name = "merle-raw"
+name = "merle-photo"
 version = "0.1.0"
 
 [[package]]
@@ -1554,7 +1554,7 @@ dependencies = [
  "bytemuck",
  "image",
  "merle-loader",
- "merle-raw",
+ "merle-photo",
  "pollster",
  "rawler",
  "softbuffer",

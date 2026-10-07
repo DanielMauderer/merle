@@ -13,7 +13,7 @@ use tracing_subscriber::EnvFilter;
 /// Install the tracing subscriber; `RUST_LOG` overrides the default filter.
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new("merle_app=debug,merle_raw=debug,merle_loader=debug,merle_core=debug,warn")
+        EnvFilter::new("merle_app=debug,merle_photo=debug,merle_loader=debug,merle_cull=debug,warn")
     });
 
     tracing_subscriber::fmt()

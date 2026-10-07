@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! Folder listing, decoding and the preload cache.
+//! A folder of photos: ordered listing, prev/next navigation and background
+//! preloading of neighbours. Decoding a single file lives in `merle-photo`.
 //!
 //! Placeholder: no functionality yet.

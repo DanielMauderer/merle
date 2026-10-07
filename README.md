@@ -5,22 +5,27 @@ decisions.
 
 ## Crates
 
-| Crate          | Kind   | Purpose                                             |
-| -------------- | ------ | --------------------------------------------------- |
-| `merle-raw`    | lib    | RAW parsing and preview extraction                  |
-| `merle-loader` | lib    | Folder listing, decoding, preload cache             |
-| `merle-core`   | lib    | Culling logic: decisions, undo, persist, tournament |
-| `merle-view`   | bin    | Minimal viewer                                      |
-| `merle-app`    | bin    | The culler                                          |
+| Crate          | Kind | Purpose                                                       |
+| -------------- | ---- | ------------------------------------------------------------- |
+| `merle-photo`  | lib  | One file → preview, orientation, AF points, metadata          |
+| `merle-loader` | lib  | A folder → ordered listing, prev/next, preload cache          |
+| `merle-cull`   | lib  | Culling logic: decisions, undo, persistence, tournament       |
+| `merle-view`   | bin  | Fast-start viewer: zoom/pan, 100% on the AF point, dir mode   |
+| `merle-app`    | bin  | The culler: full iced GUI for a culling session               |
 
 Dependency direction:
 
 ```
-merle-view -> merle-raw, merle-loader
-merle-app  -> merle-raw, merle-loader, merle-core
+merle-view -> merle-photo, merle-loader
+merle-app  -> merle-photo, merle-loader, merle-cull
 ```
 
-`merle-loader` builds on `merle-raw`; `merle-core` is a leaf crate.
+`merle-loader` builds on `merle-photo`; `merle-cull` is a leaf crate.
+
+merle does not decode RAW data itself: `merle-photo` uses
+[rawler](https://crates.io/crates/rawler) for RAW files and
+[image](https://crates.io/crates/image) for JPEG/PNG. What merle adds on top
+is reading AF points from the maker notes.
 
 ## Building
 
@@ -61,7 +66,7 @@ checked against pinned sha256 sums; reruns skip files that are already valid.
 
 Copyright (C) 2026 Daniel Mauderer.
 
-The library crates — `merle-raw`, `merle-loader`, `merle-core` — are licensed
+The library crates — `merle-photo`, `merle-loader`, `merle-cull` — are licensed
 under the **Mozilla Public License 2.0** ([LICENSE-MPL](LICENSE-MPL)): you may
 use them in a closed-source project, but changes to merle's own files must be
 published under the MPL.

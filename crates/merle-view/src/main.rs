@@ -24,7 +24,7 @@ pub mod wgp;
 /// environment plumbing.
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new("merle_view=debug,merle_raw=debug,merle_loader=debug,warn")
+        EnvFilter::new("merle_view=debug,merle_photo=debug,merle_loader=debug,warn")
     });
 
     tracing_subscriber::fmt()

@@ -30,9 +30,9 @@ unused-allowed-license = "allow"
 # merle's own crates — see README. Scoped here instead of in `allow` so these
 # licenses stay permitted for us and forbidden for our dependencies.
 exceptions = [
-  { name = "merle-raw", allow = ["MPL-2.0"] },
+  { name = "merle-photo", allow = ["MPL-2.0"] },
   { name = "merle-loader", allow = ["MPL-2.0"] },
-  { name = "merle-core", allow = ["MPL-2.0"] },
+  { name = "merle-cull", allow = ["MPL-2.0"] },
   { name = "merle-view", allow = ["GPL-3.0-or-later"] },
   { name = "merle-app", allow = ["GPL-3.0-or-later"] },
 ]

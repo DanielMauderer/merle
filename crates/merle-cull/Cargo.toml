@@ -1,6 +1,6 @@
 [package]
-name = "merle-raw"
-description = "RAW parsing and preview extraction"
+name = "merle-cull"
+description = "Culling logic: decisions, undo, persistence, tournament"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
