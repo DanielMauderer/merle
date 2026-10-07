@@ -15,9 +15,9 @@ use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
 
-pub mod sb;
 pub mod app;
 pub mod gpu;
+pub mod image_view;
 /// Install the tracing subscriber.
 ///
 /// `RUST_LOG` wins when it is set; otherwise we default to debug for our own
@@ -35,14 +35,13 @@ fn init_tracing() {
         .init();
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     init_tracing();
     start_app().expect("window create failed");
 }
 
 fn start_app() -> Result<(), EventLoopError> {
-    let event_loop = EventLoop::with_user_event().build()?;
+    let event_loop = EventLoop::new()?;
     let mut args = env::args_os().skip(1);
     let (Some(from), None) = (args.next(), args.next()) else {
         error!("usage: merle-view <image path>");
@@ -58,4 +57,3 @@ fn start_app() -> Result<(), EventLoopError> {
     info!("entering event loop");
     event_loop.run_app(&mut app)
 }
-
