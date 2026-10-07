@@ -1546,17 +1546,19 @@ dependencies = [
 [[package]]
 name = "merle-photo"
 version = "0.1.0"
+dependencies = [
+ "image",
+ "rawler",
+]
 
 [[package]]
 name = "merle-view"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "image",
  "merle-loader",
  "merle-photo",
  "pollster",
- "rawler",
  "softbuffer",
  "tokio",
  "tracing",

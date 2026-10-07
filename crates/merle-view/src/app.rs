@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use image::{DynamicImage, GenericImageView};
+use merle_photo::MerleImage;
 use tracing::info;
 use wgpu::util::DeviceExt;
 use winit::{
@@ -10,42 +10,6 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
-const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.9, -0.9, 0.0], tex_coords: [0.0, 1.0] }, // A
-    Vertex { position: [-0.9, 0.9, 0.0], tex_coords: [0.0, 0.0] },  // B
-    Vertex { position: [0.9, -0.9, 0.0], tex_coords: [1.0, 1.0] },  // C
-    Vertex { position: [0.9, 0.9, 0.0], tex_coords: [1.0, 0.0] },   // D
-];
-
-const INDICES: &[u16] = &[0, 1, 2, 1, 2, 3];
 
 /// Padded to 16 bytes to match WGSL uniform layout and leave room for zoom/offset.
 #[repr(C)]
@@ -97,11 +61,7 @@ pub struct State {
 
 impl State {
     #[allow(clippy::too_many_lines)]
-    pub async fn new(
-        window: Arc<Window>,
-        display: OwnedDisplayHandle,
-        image: DynamicImage,
-    ) -> Self {
+    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle, image: MerleImage) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
@@ -166,10 +126,9 @@ impl State {
             color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
-        let diffuse_image = image;
-        let diffuse_rgba = diffuse_image.to_rgba8();
+        let diffuse_rgba = image.preview_image.to_rgba8();
 
-        let dimensions = diffuse_image.dimensions();
+        let dimensions = image.dimensions();
 
         let texture_size =
             wgpu::Extent3d { width: dimensions.0, height: dimensions.1, depth_or_array_layers: 1 };
@@ -200,132 +159,6 @@ impl State {
             },
             texture_size,
         );
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
-
-        let image_uniform = ImageUniform::new((size.width, size.height), dimensions);
-        let image_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Image Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[image_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let image_uniform_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("image_uniform_bind_group_layout"),
-            });
-        let image_uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &image_uniform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: image_uniform_buffer.as_entire_binding(),
-            }],
-            label: Some("image_uniform_bind_group"),
-        });
-
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    Some(&texture_bind_group_layout),
-                    Some(&image_uniform_bind_group_layout),
-                ],
-                immediate_size: 0,
-            });
-        let diffuse_texture_view =
-            diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
-            ..Default::default()
-        });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(Vertex::desc())],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview_mask: None,
-            cache: None,
-        });
-
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
 
         Self {
             surface,
@@ -437,22 +270,18 @@ impl State {
         self.queue.present(output);
     }
 
-    fn handle_key(event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if let (KeyCode::KeyQ, true) = (code, is_pressed) {
-            event_loop.exit();
-        }
-    }
+    fn handle_key(event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {}
 }
 
 #[derive(Default, Debug)]
 pub struct App {
     state: Option<State>,
-    image: DynamicImage,
+    image: MerleImage,
 }
 
 impl App {
     #[must_use]
-    pub fn new(image: DynamicImage) -> Self {
+    pub fn new(image: MerleImage) -> Self {
         Self { state: None, image }
     }
 }
@@ -476,6 +305,7 @@ impl ApplicationHandler<State> for App {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
         self.state = Some(event);
     }
+
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -492,9 +322,12 @@ impl ApplicationHandler<State> for App {
             WindowEvent::KeyboardInput {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..
-            } => State::handle_key(event_loop, code, key_state.is_pressed()),
+            } => {
+                if let (KeyCode::KeyQ, true) = (code, key_state.is_pressed()) {
+                    event_loop.exit();
+                }
+            }
             _ => {}
         }
     }
 }
-

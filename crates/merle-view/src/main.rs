@@ -9,14 +9,15 @@
 use std::env;
 use std::path::Path;
 
-use image::DynamicImage;
+use merle_photo::MerleImage;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
 
 pub mod sb;
-pub mod wgp;
+pub mod app;
+pub mod gpu;
 /// Install the tracing subscriber.
 ///
 /// `RUST_LOG` wins when it is set; otherwise we default to debug for our own
@@ -52,21 +53,9 @@ fn start_app() -> Result<(), EventLoopError> {
     // input, and uses significantly less power/CPU time than ControlFlow::Poll.
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let image = open(Path::new(&from));
-    info!(width = image.width(), height = image.height(), "loaded image");
-    let mut app = wgp::App::new(image);
+    let image = MerleImage::open(Path::new(&from));
+    let mut app = app::App::new(image);
     info!("entering event loop");
     event_loop.run_app(&mut app)
 }
 
-#[must_use]
-pub fn open(path: &Path) -> DynamicImage {
-    let loader = rawler::RawLoader::new();
-    let source = rawler::rawsource::RawSource::new(path).expect("cant read source");
-
-    let decoder = loader.get_decoder(&source).expect("cant decode source");
-    decoder
-        .preview_image(&source, &rawler::decoders::RawDecodeParams::default())
-        .expect("error extracting preview image")
-        .expect("source has no preview image")
-}
