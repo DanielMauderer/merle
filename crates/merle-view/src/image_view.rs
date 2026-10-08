@@ -31,10 +31,10 @@ impl Vertex {
 }
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.9, -0.9, 0.0], tex_coords: [0.0, 1.0] },
-    Vertex { position: [-0.9, 0.9, 0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [0.9, -0.9, 0.0], tex_coords: [1.0, 1.0] },
-    Vertex { position: [0.9, 0.9, 0.0], tex_coords: [1.0, 0.0] },
+    Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 1.0] },
+    Vertex { position: [-1.0, 1.0, 0.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [1.0, -1.0, 0.0], tex_coords: [1.0, 1.0] },
+    Vertex { position: [1.0, 1.0, 0.0], tex_coords: [1.0, 0.0] },
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 1, 2, 3];
@@ -49,8 +49,8 @@ struct ImageUniform {
 }
 
 impl ImageUniform {
-    fn new(target: (u32, u32), image: (u32, u32)) -> Self {
-        Self { scale: aspect_scale(target, image), _pad: [0.0; 2] }
+    fn new(target: (u32, u32), image: (u32, u32), zoom: f32) -> Self {
+        Self { scale: aspect_scale(target, image), _pad: [zoom; 2] }
     }
 }
 
@@ -81,6 +81,7 @@ pub struct ImageView {
     texture_bind_group: Option<wgpu::BindGroup>,
     image_dimensions: (u32, u32),
     target_size: (u32, u32),
+    zoom_state: f32,
 }
 
 impl ImageView {
@@ -103,7 +104,7 @@ impl ImageView {
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Image Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[ImageUniform::new((0, 0), (0, 0))]),
+            contents: bytemuck::cast_slice(&[ImageUniform::new((0, 0), (0, 0), 1.0)]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -142,6 +143,7 @@ impl ImageView {
             texture_bind_group: None,
             image_dimensions: (0, 0),
             target_size: (0, 0),
+            zoom_state: 1.0,
         }
     }
 
@@ -220,7 +222,7 @@ impl ImageView {
     }
 
     fn write_uniform(&self, queue: &wgpu::Queue) {
-        let uniform = ImageUniform::new(self.target_size, self.image_dimensions);
+        let uniform = ImageUniform::new(self.target_size, self.image_dimensions, self.zoom_state);
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 }
