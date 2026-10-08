@@ -10,6 +10,7 @@ use std::env;
 use std::path::Path;
 
 use merle_photo::MerleImage;
+use tokio::runtime::Runtime;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
@@ -18,11 +19,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 pub mod app;
 pub mod gpu;
 pub mod image_view;
-/// Install the tracing subscriber.
-///
-/// `RUST_LOG` wins when it is set; otherwise we default to debug for our own
-/// crates and warnings from everything else, so `bacon view` is useful with no
-/// environment plumbing.
+
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new("merle_view=debug,merle_photo=debug,merle_loader=debug,warn")
@@ -47,13 +44,11 @@ fn start_app() -> Result<(), EventLoopError> {
         error!("usage: merle-view <image path>");
         std::process::exit(1);
     };
-    // ControlFlow::Wait pauses the event loop if no events are available to process.
-    // This is ideal for non-game applications that only update in response to user
-    // input, and uses significantly less power/CPU time than ControlFlow::Poll.
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let image = MerleImage::open(Path::new(&from));
-    let mut app = app::App::new(image);
+    let runtime = Runtime::new().expect("tokio runtime create failed");
+    let image = runtime.spawn_blocking(move || MerleImage::open(Path::new(&from)));
+    let mut app = app::App::new(runtime.handle().clone(), image);
     info!("entering event loop");
     event_loop.run_app(&mut app)
 }

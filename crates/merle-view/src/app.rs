@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use merle_photo::MerleImage;
+use tokio::{runtime::Handle, task::JoinHandle};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -20,10 +21,17 @@ pub struct State {
 }
 
 impl State {
-    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle, image: &MerleImage) -> Self {
+    /// Sets up the GPU and pipeline while `image` is still decoding, and only
+    /// waits for it right before the texture upload.
+    pub async fn new(
+        window: Arc<Window>,
+        display: OwnedDisplayHandle,
+        image: JoinHandle<MerleImage>,
+    ) -> Self {
         let gpu = Gpu::new(Arc::clone(&window), display).await;
         let mut image_view = ImageView::new(&gpu.device, gpu.format());
-        image_view.set_image(&gpu.device, &gpu.queue, image);
+        let image = image.await.expect("image load task failed");
+        image_view.set_image(&gpu.device, &gpu.queue, &image);
 
         let size = window.inner_size();
         let mut state = Self { window, gpu, image_view };
@@ -42,29 +50,32 @@ impl State {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct App {
+    runtime: Handle,
     state: Option<State>,
-    image: MerleImage,
+    /// In-flight decode, consumed by the first `resumed`.
+    image: Option<JoinHandle<MerleImage>>,
 }
 
 impl App {
     #[must_use]
-    pub fn new(image: MerleImage) -> Self {
-        Self { state: None, image }
+    pub fn new(runtime: Handle, image: JoinHandle<MerleImage>) -> Self {
+        Self { runtime, state: None, image: Some(image) }
     }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(image) = self.image.take() else { return };
         let window = Arc::new(
             event_loop.create_window(Window::default_attributes()).expect("cant create window"),
         );
 
-        self.state = Some(pollster::block_on(State::new(
+        self.state = Some(self.runtime.block_on(State::new(
             window,
             event_loop.owned_display_handle(),
-            &self.image,
+            image,
         )));
     }
 
