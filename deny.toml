@@ -17,7 +17,7 @@ ignore = [
 version = 2
 # Licenses accepted for third-party dependencies. Deliberately permissive-only:
 # a copyleft dependency would contaminate the MPL library crates, so it must
-# fail here rather than pass unnoticed.
+# fail here rather than pass unnoticed. Vetted exceptions live in `exceptions`.
 allow = [
   "MIT",
   "Apache-2.0",
@@ -39,6 +39,9 @@ unused-allowed-license = "allow"
 # merle's own crates — see README. Scoped here instead of in `allow` so these
 # licenses stay permitted for us and forbidden for our dependencies.
 exceptions = [
+  # rawler (RAW decoding, via merle-photo) — the only LGPL dependency we accept.
+  # Binaries linking merle-photo inherit LGPL-2.1 relinking obligations.
+  { name = "rawler", allow = ["LGPL-2.1"] },
   { name = "merle-photo", allow = ["MPL-2.0"] },
   { name = "merle-loader", allow = ["MPL-2.0"] },
   { name = "merle-cull", allow = ["MPL-2.0"] },
