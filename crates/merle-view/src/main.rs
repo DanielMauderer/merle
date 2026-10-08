@@ -8,9 +8,9 @@
 //! Minimal image viewer.
 use std::env;
 use std::path::Path;
+use std::thread;
 
 use merle_photo::MerleImage;
-use tokio::runtime::Runtime;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use winit::error::EventLoopError;
@@ -38,17 +38,21 @@ fn main() {
 }
 
 fn start_app() -> Result<(), EventLoopError> {
-    let event_loop = EventLoop::new()?;
     let mut args = env::args_os().skip(1);
     let (Some(from), None) = (args.next(), args.next()) else {
         error!("usage: merle-view <image path>");
         std::process::exit(1);
     };
+    let event_loop = EventLoop::<MerleImage>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let runtime = Runtime::new().expect("tokio runtime create failed");
-    let image = runtime.spawn_blocking(move || MerleImage::open(Path::new(&from)));
-    let mut app = app::App::new(runtime.handle().clone(), image);
+    let proxy = event_loop.create_proxy();
+    thread::spawn(move || {
+        // Only fails if the event loop has already exited.
+        let _ = proxy.send_event(MerleImage::open(Path::new(&from)));
+    });
+
+    let mut app = app::App::default();
     info!("entering event loop");
     event_loop.run_app(&mut app)
 }

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use merle_photo::MerleImage;
-use tokio::{runtime::Handle, task::JoinHandle};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -21,22 +20,19 @@ pub struct State {
 }
 
 impl State {
-    /// Sets up the GPU and pipeline while `image` is still decoding, and only
-    /// waits for it right before the texture upload.
-    pub async fn new(
-        window: Arc<Window>,
-        display: OwnedDisplayHandle,
-        image: JoinHandle<MerleImage>,
-    ) -> Self {
+    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Self {
         let gpu = Gpu::new(Arc::clone(&window), display).await;
-        let mut image_view = ImageView::new(&gpu.device, gpu.format());
-        let image = image.await.expect("image load task failed");
-        image_view.set_image(&gpu.device, &gpu.queue, &image);
+        let image_view = ImageView::new(&gpu.device, gpu.format());
 
         let size = window.inner_size();
         let mut state = Self { window, gpu, image_view };
         state.resize(size.width, size.height);
         state
+    }
+
+    pub fn set_image(&mut self, image: &MerleImage) {
+        self.image_view.set_image(&self.gpu.device, &self.gpu.queue, image);
+        self.window.request_redraw();
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -50,33 +46,35 @@ impl State {
     }
 }
 
-#[derive(Debug)]
+/// Decoded images arrive as user events, so the window is up and responsive
+/// while decoding still runs on another thread.
+#[derive(Debug, Default)]
 pub struct App {
-    runtime: Handle,
     state: Option<State>,
-    /// In-flight decode, consumed by the first `resumed`.
-    image: Option<JoinHandle<MerleImage>>,
+    /// An image that was decoded before the window existed.
+    pending: Option<MerleImage>,
 }
 
-impl App {
-    #[must_use]
-    pub fn new(runtime: Handle, image: JoinHandle<MerleImage>) -> Self {
-        Self { runtime, state: None, image: Some(image) }
-    }
-}
-
-impl ApplicationHandler for App {
+impl ApplicationHandler<MerleImage> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(image) = self.image.take() else { return };
+        if self.state.is_some() {
+            return;
+        }
         let window = Arc::new(
             event_loop.create_window(Window::default_attributes()).expect("cant create window"),
         );
+        let mut state = pollster::block_on(State::new(window, event_loop.owned_display_handle()));
+        if let Some(image) = self.pending.take() {
+            state.set_image(&image);
+        }
+        self.state = Some(state);
+    }
 
-        self.state = Some(self.runtime.block_on(State::new(
-            window,
-            event_loop.owned_display_handle(),
-            image,
-        )));
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, image: MerleImage) {
+        match &mut self.state {
+            Some(state) => state.set_image(&image),
+            None => self.pending = Some(image),
+        }
     }
 
     fn window_event(

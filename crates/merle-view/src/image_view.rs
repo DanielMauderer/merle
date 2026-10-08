@@ -38,7 +38,6 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 2, 1, 2, 3];
 
-/// Padded to 16 bytes to match WGSL uniform layout and leave room for zoom/offset.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct ImageUniform {
@@ -52,7 +51,6 @@ impl ImageUniform {
     }
 }
 
-/// Scale factors that fit an image into the window while keeping its aspect ratio.
 fn aspect_scale((win_w, win_h): (u32, u32), (img_w, img_h): (u32, u32)) -> [f32; 2] {
     if win_w == 0 || win_h == 0 || img_w == 0 || img_h == 0 {
         return [1.0, 1.0];
@@ -118,7 +116,7 @@ impl ImageView {
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
@@ -144,8 +142,14 @@ impl ImageView {
     }
 
     pub fn set_image(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, image: &MerleImage) {
-        let rgba = image.preview_image.to_rgba8();
-        let (width, height) = image.dimensions();
+        let max = device.limits().max_texture_dimension_2d;
+        let (img_w, img_h) = image.dimensions();
+        let rgba = if img_w > max || img_h > max {
+            image.preview_image.thumbnail(max, max).to_rgba8()
+        } else {
+            image.preview_image.to_rgba8()
+        };
+        let (width, height) = rgba.dimensions();
 
         let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
