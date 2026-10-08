@@ -7,16 +7,13 @@
 //! caching.
 //!
 //! Placeholder: no functionality yet.
-
+pub use crate::error::PhotoError;
+use image::{DynamicImage, GenericImageView, RgbaImage};
 use std::borrow::Cow;
 use std::num::NonZero;
 use std::path::Path;
 use std::thread;
-
-use image::{DynamicImage, GenericImageView, RgbaImage};
 use tracing::{Span, debug_span, field, info, instrument};
-
-pub use crate::error::PhotoError;
 
 mod error;
 

@@ -6,13 +6,12 @@
 // any later version. See the LICENSE-GPL file for the full text.
 
 //! Minimal image viewer.
+use merle_photo::{MerleImage, PhotoError};
 use std::env;
 use std::iter;
 use std::path::Path;
 use std::process::ExitCode;
 use std::thread;
-
-use merle_photo::{MerleImage, PhotoError};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;

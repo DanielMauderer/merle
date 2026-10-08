@@ -1,6 +1,8 @@
-use std::sync::Arc;
-
+use crate::error::{Error, GpuError};
+use crate::gpu::Gpu;
+use crate::image_view::ImageView;
 use merle_photo::{MerleImage, PhotoError};
+use std::sync::Arc;
 use tracing::instrument;
 use winit::{
     application::ApplicationHandler,
@@ -9,10 +11,6 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
-
-use crate::error::{Error, GpuError};
-use crate::gpu::Gpu;
-use crate::image_view::ImageView;
 
 #[derive(Debug)]
 pub struct State {

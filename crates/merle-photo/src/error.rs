@@ -1,13 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
+use rawler::RawlerError;
 use std::error::Error;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
-
-use rawler::RawlerError;
 
 #[derive(Debug)]
 pub enum PhotoError {

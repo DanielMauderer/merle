@@ -1,7 +1,6 @@
+use merle_photo::PhotoError;
 use std::error::Error as StdError;
 use std::fmt;
-
-use merle_photo::PhotoError;
 use winit::error::{EventLoopError, OsError};
 
 #[derive(Debug)]

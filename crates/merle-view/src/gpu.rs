@@ -1,9 +1,7 @@
+use crate::error::GpuError;
 use std::sync::Arc;
-
 use tracing::{debug_span, info, instrument};
 use winit::{event_loop::OwnedDisplayHandle, window::Window};
-
-use crate::error::GpuError;
 
 #[derive(Debug)]
 pub struct Gpu {

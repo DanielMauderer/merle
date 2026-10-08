@@ -6,7 +6,6 @@
 // any later version. See the LICENSE-GPL file for the full text.
 
 //! The merle culler.
-
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
