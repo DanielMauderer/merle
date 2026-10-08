@@ -147,13 +147,7 @@ impl ImageView {
     pub fn set_image(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, image: &MerleImage) {
         let max = device.limits().max_texture_dimension_2d;
         let (img_w, img_h) = image.dimensions();
-        let rgba = debug_span!("to_rgba8").in_scope(|| {
-            if img_w > max || img_h > max {
-                image.preview_image.thumbnail(max, max).to_rgba8()
-            } else {
-                image.preview_image.to_rgba8()
-            }
-        });
+        let rgba = debug_span!("rgba8").in_scope(|| image.rgba8(max));
         let (width, height) = rgba.dimensions();
         if (width, height) != (img_w, img_h) {
             debug!(img_w, img_h, max, width, height, "downscaled to fit texture limit");
@@ -177,7 +171,7 @@ impl ImageView {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba,
+            rgba.as_raw(),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * width),

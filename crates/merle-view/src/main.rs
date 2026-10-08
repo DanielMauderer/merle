@@ -30,9 +30,7 @@ fn init_tracing() {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)
-        // Every span logs its `time.busy`/`time.idle` when it closes.
         .with_span_events(FmtSpan::CLOSE)
-        // Timestamps relative to launch, so startup latency is readable directly.
         .with_timer(Uptime::default())
         .with_writer(std::io::stderr)
         .init();
@@ -54,8 +52,8 @@ fn start_app() -> Result<(), EventLoopError> {
 
     let proxy = event_loop.create_proxy();
     thread::spawn(move || {
-        // Only fails if the event loop has already exited.
-        let _ = proxy.send_event(MerleImage::open(Path::new(&from)));
+        let image = MerleImage::open(Path::new(&from)).into_rgba8();
+        let _ = proxy.send_event(image);
     });
 
     let mut app = app::App::default();

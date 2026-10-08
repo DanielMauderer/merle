@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tracing::{info, instrument};
+use tracing::{debug_span, info, instrument};
 use winit::{event_loop::OwnedDisplayHandle, window::Window};
 
 #[derive(Debug)]
@@ -17,9 +17,12 @@ impl Gpu {
     pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle(
-            Box::new(display),
-        ));
+        let descriptor = wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            ..wgpu::InstanceDescriptor::new_with_display_handle(Box::new(display))
+        }
+        .with_env();
+        let instance = debug_span!("instance").in_scope(|| wgpu::Instance::new(descriptor));
         let surface = instance.create_surface(window).expect("cant create surface");
 
         let adapter = instance
@@ -44,7 +47,6 @@ impl Gpu {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                // Camera previews can exceed the 8192px default texture limit.
                 required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
                 memory_hints: wgpu::MemoryHints::default(),
                 trace: wgpu::Trace::Off,

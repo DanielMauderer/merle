@@ -48,12 +48,9 @@ impl State {
     }
 }
 
-/// Decoded images arrive as user events, so the window is up and responsive
-/// while decoding still runs on another thread.
 #[derive(Debug, Default)]
 pub struct App {
     state: Option<State>,
-    /// An image that was decoded before the window existed.
     pending: Option<MerleImage>,
 }
 

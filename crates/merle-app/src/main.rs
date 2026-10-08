@@ -12,7 +12,6 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::Uptime;
 
-/// Install the tracing subscriber; `RUST_LOG` overrides the default filter.
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new("merle_app=debug,merle_photo=debug,merle_loader=debug,merle_cull=debug,warn")
@@ -21,9 +20,7 @@ fn init_tracing() {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)
-        // Every span logs its `time.busy`/`time.idle` when it closes.
         .with_span_events(FmtSpan::CLOSE)
-        // Timestamps relative to launch, so startup latency is readable directly.
         .with_timer(Uptime::default())
         .with_writer(std::io::stderr)
         .init();
