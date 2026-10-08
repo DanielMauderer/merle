@@ -4,6 +4,14 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+# Unmaintained transitive deps with no maintained upgrade path; neither is a
+# vulnerability. Revisit when upstream migrates.
+ignore = [
+  # paste — via image → exr/rav1e → pulp
+  "RUSTSEC-2024-0436",
+  # ttf-parser — via winit → sctk-adwaita → ab_glyph
+  "RUSTSEC-2026-0192",
+]
 
 [licenses]
 version = 2
@@ -17,6 +25,7 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
+  "NCSA",
   "Unicode-3.0",
   "Zlib",
 ]
