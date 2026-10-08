@@ -1,4 +1,5 @@
 use merle_photo::MerleImage;
+use tracing::{debug, debug_span, instrument};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -82,6 +83,7 @@ pub struct ImageView {
 
 impl ImageView {
     #[must_use]
+    #[instrument(name = "ImageView::new", skip_all)]
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -141,15 +143,21 @@ impl ImageView {
         }
     }
 
+    #[instrument(skip_all)]
     pub fn set_image(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, image: &MerleImage) {
         let max = device.limits().max_texture_dimension_2d;
         let (img_w, img_h) = image.dimensions();
-        let rgba = if img_w > max || img_h > max {
-            image.preview_image.thumbnail(max, max).to_rgba8()
-        } else {
-            image.preview_image.to_rgba8()
-        };
+        let rgba = debug_span!("to_rgba8").in_scope(|| {
+            if img_w > max || img_h > max {
+                image.preview_image.thumbnail(max, max).to_rgba8()
+            } else {
+                image.preview_image.to_rgba8()
+            }
+        });
         let (width, height) = rgba.dimensions();
+        if (width, height) != (img_w, img_h) {
+            debug!(img_w, img_h, max, width, height, "downscaled to fit texture limit");
+        }
 
         let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -197,11 +205,13 @@ impl ImageView {
         self.write_uniform(queue);
     }
 
+    #[instrument(level = "trace", skip(self, queue))]
     pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
         self.target_size = (width, height);
         self.write_uniform(queue);
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         let Some(texture_bind_group) = &self.texture_bind_group else { return };
         let n_index = u32::try_from(INDICES.len()).expect("to large");

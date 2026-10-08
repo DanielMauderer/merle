@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tracing::{info, instrument};
 use winit::{event_loop::OwnedDisplayHandle, window::Window};
 
 #[derive(Debug)]
@@ -12,6 +13,7 @@ pub struct Gpu {
 }
 
 impl Gpu {
+    #[instrument(name = "Gpu::new", skip_all)]
     pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Self {
         let size = window.inner_size();
 
@@ -29,6 +31,13 @@ impl Gpu {
             })
             .await
             .expect("cant create adapter");
+        let adapter_info = adapter.get_info();
+        info!(
+            name = %adapter_info.name,
+            backend = %adapter_info.backend,
+            driver = %adapter_info.driver,
+            "adapter selected"
+        );
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -44,6 +53,7 @@ impl Gpu {
             .expect("cant create device/queue");
 
         let config = surface_config(&surface.get_capabilities(&adapter), size.width, size.height);
+        info!(format = ?config.format, present_mode = ?config.present_mode, "surface configured");
 
         Self { surface, device, queue, config, is_surface_configured: false }
     }
@@ -52,6 +62,7 @@ impl Gpu {
         self.config.format
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
             return;
@@ -62,6 +73,7 @@ impl Gpu {
         self.is_surface_configured = true;
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn render(&mut self, draw: impl FnOnce(&mut wgpu::RenderPass<'_>)) {
         let Some(frame) = self.acquire_frame() else { return };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use merle_photo::MerleImage;
+use tracing::instrument;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -20,6 +21,7 @@ pub struct State {
 }
 
 impl State {
+    #[instrument(name = "State::new", skip_all)]
     pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Self {
         let gpu = Gpu::new(Arc::clone(&window), display).await;
         let image_view = ImageView::new(&gpu.device, gpu.format());

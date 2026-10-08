@@ -11,6 +11,7 @@ authors.workspace = true
 [dependencies]
 image.workspace = true
 rawler.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

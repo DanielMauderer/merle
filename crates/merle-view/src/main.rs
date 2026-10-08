@@ -13,6 +13,8 @@ use std::thread;
 use merle_photo::MerleImage;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::fmt::time::Uptime;
 use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -28,6 +30,10 @@ fn init_tracing() {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)
+        // Every span logs its `time.busy`/`time.idle` when it closes.
+        .with_span_events(FmtSpan::CLOSE)
+        // Timestamps relative to launch, so startup latency is readable directly.
+        .with_timer(Uptime::default())
         .with_writer(std::io::stderr)
         .init();
 }
