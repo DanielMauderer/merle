@@ -38,6 +38,8 @@ const VERTICES: &[Vertex] = &[
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 1, 2, 3];
+#[allow(clippy::cast_possible_truncation)]
+const N_INDICES: u32 = INDICES.len() as u32;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -208,14 +210,13 @@ impl ImageView {
     #[instrument(level = "trace", skip_all)]
     pub fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         let Some(texture_bind_group) = &self.texture_bind_group else { return };
-        let n_index = u32::try_from(INDICES.len()).expect("to large");
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..n_index, 0, 0..1);
+        render_pass.draw_indexed(0..N_INDICES, 0, 0..1);
     }
 
     fn write_uniform(&self, queue: &wgpu::Queue) {

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use merle_photo::MerleImage;
+use merle_photo::{MerleImage, PhotoError};
 use tracing::instrument;
 use winit::{
     application::ApplicationHandler,
@@ -10,6 +10,7 @@ use winit::{
     window::Window,
 };
 
+use crate::error::{Error, GpuError};
 use crate::gpu::Gpu;
 use crate::image_view::ImageView;
 
@@ -22,14 +23,14 @@ pub struct State {
 
 impl State {
     #[instrument(name = "State::new", skip_all)]
-    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Self {
-        let gpu = Gpu::new(Arc::clone(&window), display).await;
+    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Result<Self, GpuError> {
+        let gpu = Gpu::new(Arc::clone(&window), display).await?;
         let image_view = ImageView::new(&gpu.device, gpu.format());
 
         let size = window.inner_size();
         let mut state = Self { window, gpu, image_view };
         state.resize(size.width, size.height);
-        state
+        Ok(state)
     }
 
     pub fn set_image(&mut self, image: &MerleImage) {
@@ -43,8 +44,8 @@ impl State {
         self.window.request_redraw();
     }
 
-    pub fn render(&mut self) {
-        self.gpu.render(|render_pass| self.image_view.draw(render_pass));
+    pub fn render(&mut self) -> Result<(), GpuError> {
+        self.gpu.render(|render_pass| self.image_view.draw(render_pass))
     }
 }
 
@@ -52,24 +53,45 @@ impl State {
 pub struct App {
     state: Option<State>,
     pending: Option<MerleImage>,
+    error: Option<Error>,
 }
 
-impl ApplicationHandler<MerleImage> for App {
+impl App {
+    pub fn take_error(&mut self) -> Option<Error> {
+        self.error.take()
+    }
+
+    fn fail(&mut self, event_loop: &ActiveEventLoop, error: Error) {
+        self.error.get_or_insert(error);
+        event_loop.exit();
+    }
+}
+
+impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             return;
         }
-        let window = Arc::new(
-            event_loop.create_window(Window::default_attributes()).expect("cant create window"),
-        );
-        let mut state = pollster::block_on(State::new(window, event_loop.owned_display_handle()));
+        let window = match event_loop.create_window(Window::default_attributes()) {
+            Ok(window) => Arc::new(window),
+            Err(err) => return self.fail(event_loop, err.into()),
+        };
+        let mut state =
+            match pollster::block_on(State::new(window, event_loop.owned_display_handle())) {
+                Ok(state) => state,
+                Err(err) => return self.fail(event_loop, err.into()),
+            };
         if let Some(image) = self.pending.take() {
             state.set_image(&image);
         }
         self.state = Some(state);
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, image: MerleImage) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, image: Result<MerleImage, PhotoError>) {
+        let image = match image {
+            Ok(image) => image,
+            Err(err) => return self.fail(event_loop, err.into()),
+        };
         match &mut self.state {
             Some(state) => state.set_image(&image),
             None => self.pending = Some(image),
@@ -87,7 +109,11 @@ impl ApplicationHandler<MerleImage> for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
-            WindowEvent::RedrawRequested => state.render(),
+            WindowEvent::RedrawRequested => {
+                if let Err(err) = state.render() {
+                    self.fail(event_loop, err.into());
+                }
+            }
             WindowEvent::KeyboardInput {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..

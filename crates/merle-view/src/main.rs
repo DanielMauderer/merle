@@ -7,18 +7,22 @@
 
 //! Minimal image viewer.
 use std::env;
+use std::iter;
 use std::path::Path;
+use std::process::ExitCode;
 use std::thread;
 
-use merle_photo::MerleImage;
+use merle_photo::{MerleImage, PhotoError};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::Uptime;
-use winit::error::EventLoopError;
 use winit::event_loop::{ControlFlow, EventLoop};
 
+use crate::error::Error;
+
 pub mod app;
+pub mod error;
 pub mod gpu;
 pub mod image_view;
 
@@ -36,27 +40,35 @@ fn init_tracing() {
         .init();
 }
 
-fn main() {
+fn main() -> ExitCode {
     init_tracing();
-    start_app().expect("window create failed");
+    match start_app() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            let chain: Vec<_> =
+                iter::successors(Some(&err as &dyn std::error::Error), |e| e.source())
+                    .map(ToString::to_string)
+                    .collect();
+            error!("{}", chain.join(": "));
+            ExitCode::FAILURE
+        }
+    }
 }
 
-fn start_app() -> Result<(), EventLoopError> {
+fn start_app() -> Result<(), Error> {
     let mut args = env::args_os().skip(1);
-    let (Some(from), None) = (args.next(), args.next()) else {
-        error!("usage: merle-view <image path>");
-        std::process::exit(1);
-    };
-    let event_loop = EventLoop::<MerleImage>::with_user_event().build()?;
+    let (Some(from), None) = (args.next(), args.next()) else { return Err(Error::Usage) };
+    let event_loop = EventLoop::<Result<MerleImage, PhotoError>>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let proxy = event_loop.create_proxy();
     thread::spawn(move || {
-        let image = MerleImage::open(Path::new(&from)).into_rgba8();
+        let image = MerleImage::open(Path::new(&from)).map(MerleImage::into_rgba8);
         let _ = proxy.send_event(image);
     });
 
     let mut app = app::App::default();
     info!("entering event loop");
-    event_loop.run_app(&mut app)
+    event_loop.run_app(&mut app)?;
+    app.take_error().map_or(Ok(()), Err)
 }

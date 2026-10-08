@@ -3,6 +3,8 @@ use std::sync::Arc;
 use tracing::{debug_span, info, instrument};
 use winit::{event_loop::OwnedDisplayHandle, window::Window};
 
+use crate::error::GpuError;
+
 #[derive(Debug)]
 pub struct Gpu {
     surface: wgpu::Surface<'static>,
@@ -14,7 +16,7 @@ pub struct Gpu {
 
 impl Gpu {
     #[instrument(name = "Gpu::new", skip_all)]
-    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Self {
+    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Result<Self, GpuError> {
         let size = window.inner_size();
 
         let descriptor = wgpu::InstanceDescriptor {
@@ -23,7 +25,7 @@ impl Gpu {
         }
         .with_env();
         let instance = debug_span!("instance").in_scope(|| wgpu::Instance::new(descriptor));
-        let surface = instance.create_surface(window).expect("cant create surface");
+        let surface = instance.create_surface(window)?;
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -32,8 +34,7 @@ impl Gpu {
                 force_fallback_adapter: false,
                 apply_limit_buckets: true,
             })
-            .await
-            .expect("cant create adapter");
+            .await?;
         let adapter_info = adapter.get_info();
         info!(
             name = %adapter_info.name,
@@ -51,13 +52,12 @@ impl Gpu {
                 memory_hints: wgpu::MemoryHints::default(),
                 trace: wgpu::Trace::Off,
             })
-            .await
-            .expect("cant create device/queue");
+            .await?;
 
         let config = surface_config(&surface.get_capabilities(&adapter), size.width, size.height);
         info!(format = ?config.format, present_mode = ?config.present_mode, "surface configured");
 
-        Self { surface, device, queue, config, is_surface_configured: false }
+        Ok(Self { surface, device, queue, config, is_surface_configured: false })
     }
 
     pub fn format(&self) -> wgpu::TextureFormat {
@@ -76,8 +76,8 @@ impl Gpu {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn render(&mut self, draw: impl FnOnce(&mut wgpu::RenderPass<'_>)) {
-        let Some(frame) = self.acquire_frame() else { return };
+    pub fn render(&mut self, draw: impl FnOnce(&mut wgpu::RenderPass<'_>)) -> Result<(), GpuError> {
+        let Some(frame) = self.acquire_frame()? else { return Ok(()) };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
@@ -103,23 +103,24 @@ impl Gpu {
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         self.queue.present(frame);
+        Ok(())
     }
 
-    fn acquire_frame(&mut self) -> Option<wgpu::SurfaceTexture> {
+    fn acquire_frame(&mut self) -> Result<Option<wgpu::SurfaceTexture>, GpuError> {
         if !self.is_surface_configured {
-            return None;
+            return Ok(None);
         }
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Ok(Some(frame)),
             wgpu::CurrentSurfaceTexture::Timeout
             | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => None,
+            | wgpu::CurrentSurfaceTexture::Validation => Ok(None),
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
-                None
+                Ok(None)
             }
-            wgpu::CurrentSurfaceTexture::Lost => panic!("Lost device"),
+            wgpu::CurrentSurfaceTexture::Lost => Err(GpuError::SurfaceLost),
         }
     }
 }
