@@ -50,8 +50,8 @@ struct ImageUniform {
 }
 
 impl ImageUniform {
-    fn new(target: (u32, u32), image: (u32, u32), zoom: f32) -> Self {
-        Self { scale: aspect_scale(target, image), zoom: [zoom; 2], center: [0.5, 0.5] }
+    fn new(target: (u32, u32), image: (u32, u32), zoom: f32, center: (f32, f32)) -> Self {
+        Self { scale: aspect_scale(target, image), zoom: [zoom; 2], center: [center.0, center.1] }
     }
 }
 
@@ -83,6 +83,7 @@ pub struct ImageView {
     image_dimensions: (u32, u32),
     target_size: (u32, u32),
     zoom_state: f32,
+    center: (f32, f32),
 }
 
 impl ImageView {
@@ -105,7 +106,7 @@ impl ImageView {
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Image Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[ImageUniform::new((0, 0), (0, 0), 1.0)]),
+            contents: bytemuck::cast_slice(&[ImageUniform::new((0, 0), (0, 0), 1.0, (0.0, 0.0))]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -145,6 +146,7 @@ impl ImageView {
             image_dimensions: (0, 0),
             target_size: (0, 0),
             zoom_state: 1.0,
+            center: (0.0, 0.0),
         }
     }
 
@@ -205,17 +207,44 @@ impl ImageView {
     }
 
     #[instrument(level = "trace", skip(self, queue))]
+    pub fn reset(&mut self, queue: &wgpu::Queue) {
+        self.center = (0.0, 0.0);
+        self.zoom_state = 1.0;
+        self.write_uniform(queue);
+    }
+
+    #[instrument(level = "trace", skip(self, queue))]
+    pub fn center(&mut self, queue: &wgpu::Queue) {
+        self.center = (0.0, 0.0);
+        self.write_uniform(queue);
+    }
+
+    #[instrument(level = "trace", skip(self, queue))]
     pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
         self.target_size = (width, height);
         self.write_uniform(queue);
     }
 
     #[instrument(level = "trace", skip(self, queue))]
+    pub fn move_x(&mut self, queue: &wgpu::Queue, delta: f32) {
+        self.center.1 += delta;
+        self.write_uniform(queue);
+    }
+
+    #[instrument(level = "trace", skip(self, queue))]
+    pub fn move_y(&mut self, queue: &wgpu::Queue, delta: f32) {
+        self.center.0 += delta;
+        self.write_uniform(queue);
+    }
+
+    #[instrument(level = "trace", skip(self, queue))]
     pub fn zoom(&mut self, queue: &wgpu::Queue, delta: f32) {
-        self.zoom_state += (delta * 0.01);
+        let lower_limit = 0.5;
+        let uppler_limit = 10.0;
+        self.zoom_state += delta * 0.1;
         match self.zoom_state {
-            zoom if zoom < 0.0 => self.zoom_state = 0.0,
-            zoom if zoom > 2.0 => self.zoom_state = 2.0,
+            zoom if zoom < lower_limit => self.zoom_state = lower_limit,
+            zoom if zoom > uppler_limit => self.zoom_state = uppler_limit,
             _ => {}
         }
         info!(self.zoom_state, "scale");
@@ -235,7 +264,12 @@ impl ImageView {
     }
 
     fn write_uniform(&self, queue: &wgpu::Queue) {
-        let uniform = ImageUniform::new(self.target_size, self.image_dimensions, self.zoom_state);
+        let uniform = ImageUniform::new(
+            self.target_size,
+            self.image_dimensions,
+            self.zoom_state,
+            self.center,
+        );
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 }

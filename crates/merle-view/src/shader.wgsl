@@ -24,8 +24,8 @@ fn vs_main(
     model: VertexInput,
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.tex_coords = model.tex_coords * image.zoom;
-    out.clip_position = vec4<f32>(model.position.xy * image.scale, model.position.z, 1.0);
+    out.tex_coords = model.tex_coords;
+    out.clip_position = vec4<f32>((model.position.xy * image.scale * image.zoom) + image.center, model.position.z, 1.0);
     return out;
 }
 

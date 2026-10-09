@@ -43,16 +43,27 @@ impl State {
     }
 
     pub fn move_x(&mut self, delta: f32) {
-        self.image_view.zoom(&self.gpu.queue, delta);
+        self.image_view.move_x(&self.gpu.queue, delta);
         self.window.request_redraw();
     }
 
     pub fn move_y(&mut self, delta: f32) {
+        self.image_view.move_y(&self.gpu.queue, delta);
+        self.window.request_redraw();
+    }
+
+    pub fn zoom(&mut self, delta: f32) {
         self.image_view.zoom(&self.gpu.queue, delta);
         self.window.request_redraw();
     }
-    pub fn zoom(&mut self, delta: f32) {
-        self.image_view.zoom(&self.gpu.queue, delta);
+
+    pub fn center(&mut self) {
+        self.image_view.center(&self.gpu.queue);
+        self.window.request_redraw();
+    }
+
+    pub fn reset(&mut self) {
+        self.image_view.reset(&self.gpu.queue);
         self.window.request_redraw();
     }
 
@@ -129,21 +140,22 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
             WindowEvent::KeyboardInput {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..
-            } => {
-                match (code, key_state.is_pressed()) {
-                    (KeyCode::KeyQ, true) => {
-                        event_loop.exit();
-                    }
-                    (KeyCode::KeyW, true) => state.move_x(10.0),
-                    (KeyCode::KeyS, true) => state.move_x(-10.0),
-                    (KeyCode::KeyA, true) => state.move_y(10.0),
-                    (KeyCode::KeyD, true) => state.move_y(-10.0),
-                    _ => (),
+            } => match (code, key_state.is_pressed()) {
+                (KeyCode::KeyQ, true) => {
+                    event_loop.exit();
                 }
-            }
+                (KeyCode::KeyW, true) => state.move_x(-0.1),
+                (KeyCode::KeyS, true) => state.move_x(0.1),
+                (KeyCode::KeyA, true) => state.move_y(0.1),
+                (KeyCode::KeyD, true) => state.move_y(-0.1),
+                (KeyCode::KeyR, true) => state.reset(),
+                (KeyCode::KeyC, true) => state.center(),
+                _ => (),
+            },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
                 let change = match delta {
                     winit::event::MouseScrollDelta::LineDelta(_, x) => x,
+                    #[allow(clippy::cast_possible_truncation)]
                     winit::event::MouseScrollDelta::PixelDelta(d) => d.x as f32,
                 };
                 state.zoom(change);
