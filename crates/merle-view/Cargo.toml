@@ -1,6 +1,6 @@
 [package]
 name = "merle-view"
-description = "Minimal image viewer binary"
+description = "Fast-start image viewer binary"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,8 +9,14 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-merle-raw.workspace = true
+merle-photo.workspace = true
 merle-loader.workspace = true
+winit.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+bytemuck.workspace = true
 
 [lints]
 workspace = true

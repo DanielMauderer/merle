@@ -1,6 +1,6 @@
 [package]
-name = "merle-core"
-description = "Culling logic: decisions, undo, persistence, tournament"
+name = "merle-photo"
+description = "Open one photo file: preview, orientation, AF points, metadata"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,9 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+image.workspace = true
+rawler.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

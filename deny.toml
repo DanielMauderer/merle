@@ -4,12 +4,20 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+# Unmaintained transitive deps with no maintained upgrade path; neither is a
+# vulnerability. Revisit when upstream migrates.
+ignore = [
+  # paste — via image → exr/rav1e → pulp
+  "RUSTSEC-2024-0436",
+  # ttf-parser — via winit → sctk-adwaita → ab_glyph
+  "RUSTSEC-2026-0192",
+]
 
 [licenses]
 version = 2
 # Licenses accepted for third-party dependencies. Deliberately permissive-only:
 # a copyleft dependency would contaminate the MPL library crates, so it must
-# fail here rather than pass unnoticed.
+# fail here rather than pass unnoticed. Vetted exceptions live in `exceptions`.
 allow = [
   "MIT",
   "Apache-2.0",
@@ -17,6 +25,7 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
+  "NCSA",
   "Unicode-3.0",
   "Zlib",
 ]
@@ -30,9 +39,12 @@ unused-allowed-license = "allow"
 # merle's own crates — see README. Scoped here instead of in `allow` so these
 # licenses stay permitted for us and forbidden for our dependencies.
 exceptions = [
-  { name = "merle-raw", allow = ["MPL-2.0"] },
+  # rawler (RAW decoding, via merle-photo) — the only LGPL dependency we accept.
+  # Binaries linking merle-photo inherit LGPL-2.1 relinking obligations.
+  { name = "rawler", allow = ["LGPL-2.1"] },
+  { name = "merle-photo", allow = ["MPL-2.0"] },
   { name = "merle-loader", allow = ["MPL-2.0"] },
-  { name = "merle-core", allow = ["MPL-2.0"] },
+  { name = "merle-cull", allow = ["MPL-2.0"] },
   { name = "merle-view", allow = ["GPL-3.0-or-later"] },
   { name = "merle-app", allow = ["GPL-3.0-or-later"] },
 ]

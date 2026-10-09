@@ -1,0 +1,143 @@
+use crate::error::GpuError;
+use std::sync::Arc;
+use tracing::{debug_span, info, instrument};
+use winit::{event_loop::OwnedDisplayHandle, window::Window};
+
+#[derive(Debug)]
+pub struct Gpu {
+    surface: wgpu::Surface<'static>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    is_surface_configured: bool,
+}
+
+impl Gpu {
+    #[instrument(name = "Gpu::new", skip_all)]
+    pub async fn new(window: Arc<Window>, display: OwnedDisplayHandle) -> Result<Self, GpuError> {
+        let size = window.inner_size();
+
+        let descriptor = wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            ..wgpu::InstanceDescriptor::new_with_display_handle(Box::new(display))
+        }
+        .with_env();
+        let instance = debug_span!("instance").in_scope(|| wgpu::Instance::new(descriptor));
+        let surface = instance.create_surface(window)?;
+
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+                apply_limit_buckets: true,
+            })
+            .await?;
+        let adapter_info = adapter.get_info();
+        info!(
+            name = %adapter_info.name,
+            backend = %adapter_info.backend,
+            driver = %adapter_info.driver,
+            "adapter selected"
+        );
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
+                memory_hints: wgpu::MemoryHints::default(),
+                trace: wgpu::Trace::Off,
+            })
+            .await?;
+
+        let config = surface_config(&surface.get_capabilities(&adapter), size.width, size.height);
+        info!(format = ?config.format, present_mode = ?config.present_mode, "surface configured");
+
+        Ok(Self { surface, device, queue, config, is_surface_configured: false })
+    }
+
+    pub fn format(&self) -> wgpu::TextureFormat {
+        self.config.format
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+        self.config.width = width;
+        self.config.height = height;
+        self.surface.configure(&self.device, &self.config);
+        self.is_surface_configured = true;
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn render(&mut self, draw: impl FnOnce(&mut wgpu::RenderPass<'_>)) -> Result<(), GpuError> {
+        let Some(frame) = self.acquire_frame()? else { return Ok(()) };
+        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+            draw(&mut render_pass);
+        }
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.present(frame);
+        Ok(())
+    }
+
+    fn acquire_frame(&mut self) -> Result<Option<wgpu::SurfaceTexture>, GpuError> {
+        if !self.is_surface_configured {
+            return Ok(None);
+        }
+        match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Ok(Some(frame)),
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => Ok(None),
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                self.surface.configure(&self.device, &self.config);
+                Ok(None)
+            }
+            wgpu::CurrentSurfaceTexture::Lost => Err(GpuError::SurfaceLost),
+        }
+    }
+}
+
+fn surface_config(
+    caps: &wgpu::SurfaceCapabilities,
+    width: u32,
+    height: u32,
+) -> wgpu::SurfaceConfiguration {
+    let format = caps.formats.iter().find(|f| f.is_srgb()).copied().unwrap_or(caps.formats[0]);
+    wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format,
+        width,
+        height,
+        present_mode: caps.present_modes[0],
+        alpha_mode: caps.alpha_modes[0],
+        view_formats: vec![],
+        desired_maximum_frame_latency: 2,
+        color_space: wgpu::SurfaceColorSpace::Auto,
+    }
+}
