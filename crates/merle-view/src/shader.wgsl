@@ -12,7 +12,8 @@ struct VertexOutput {
 
 struct ImageUniform {
     scale: vec2<f32>,
-    _pad: vec2<f32>,
+    zoom: vec2<f32>,
+    center: vec2<f32>,
 };
 
 @group(1) @binding(0)
@@ -23,7 +24,7 @@ fn vs_main(
     model: VertexInput,
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.tex_coords = model.tex_coords;
+    out.tex_coords = model.tex_coords * image.zoom;
     out.clip_position = vec4<f32>(model.position.xy * image.scale, model.position.z, 1.0);
     return out;
 }

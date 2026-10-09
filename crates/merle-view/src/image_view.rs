@@ -1,5 +1,5 @@
 use merle_photo::MerleImage;
-use tracing::{debug, debug_span, instrument};
+use tracing::{debug, debug_span, info, instrument};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -45,12 +45,13 @@ const N_INDICES: u32 = INDICES.len() as u32;
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct ImageUniform {
     scale: [f32; 2],
-    _pad: [f32; 2],
+    zoom: [f32; 2],
+    center: [f32; 2],
 }
 
 impl ImageUniform {
     fn new(target: (u32, u32), image: (u32, u32), zoom: f32) -> Self {
-        Self { scale: aspect_scale(target, image), _pad: [zoom; 2] }
+        Self { scale: aspect_scale(target, image), zoom: [zoom; 2], center: [0.5, 0.5] }
     }
 }
 
@@ -206,6 +207,18 @@ impl ImageView {
     #[instrument(level = "trace", skip(self, queue))]
     pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
         self.target_size = (width, height);
+        self.write_uniform(queue);
+    }
+
+    #[instrument(level = "trace", skip(self, queue))]
+    pub fn zoom(&mut self, queue: &wgpu::Queue, delta: f32) {
+        self.zoom_state += (delta * 0.01);
+        match self.zoom_state {
+            zoom if zoom < 0.0 => self.zoom_state = 0.0,
+            zoom if zoom > 2.0 => self.zoom_state = 2.0,
+            _ => {}
+        }
+        info!(self.zoom_state, "scale");
         self.write_uniform(queue);
     }
 

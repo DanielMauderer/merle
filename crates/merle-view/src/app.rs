@@ -42,6 +42,20 @@ impl State {
         self.window.request_redraw();
     }
 
+    pub fn move_x(&mut self, delta: f32) {
+        self.image_view.zoom(&self.gpu.queue, delta);
+        self.window.request_redraw();
+    }
+
+    pub fn move_y(&mut self, delta: f32) {
+        self.image_view.zoom(&self.gpu.queue, delta);
+        self.window.request_redraw();
+    }
+    pub fn zoom(&mut self, delta: f32) {
+        self.image_view.zoom(&self.gpu.queue, delta);
+        self.window.request_redraw();
+    }
+
     pub fn render(&mut self) -> Result<(), GpuError> {
         self.gpu.render(|render_pass| self.image_view.draw(render_pass))
     }
@@ -116,9 +130,23 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..
             } => {
-                if let (KeyCode::KeyQ, true) = (code, key_state.is_pressed()) {
-                    event_loop.exit();
+                match (code, key_state.is_pressed()) {
+                    (KeyCode::KeyQ, true) => {
+                        event_loop.exit();
+                    }
+                    (KeyCode::KeyW, true) => state.move_x(10.0),
+                    (KeyCode::KeyS, true) => state.move_x(-10.0),
+                    (KeyCode::KeyA, true) => state.move_y(10.0),
+                    (KeyCode::KeyD, true) => state.move_y(-10.0),
+                    _ => (),
                 }
+            }
+            WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
+                let change = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, x) => x,
+                    winit::event::MouseScrollDelta::PixelDelta(d) => d.x as f32,
+                };
+                state.zoom(change);
             }
             _ => {}
         }
