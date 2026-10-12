@@ -173,7 +173,7 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
                 let change = match delta {
                     MouseScrollDelta::LineDelta(_, y) => y,
-                    #[allow(clippy::cast_possible_truncation)]
+                    #[expect(clippy::cast_possible_truncation, reason = "scroll delta is small")]
                     MouseScrollDelta::PixelDelta(d) => d.y as f32,
                 };
                 state.zoom(change);
@@ -191,7 +191,7 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
             WindowEvent::CursorMoved { device_id: _, position } => {
                 let Some(state) = &mut self.state else { return };
 
-                state.update_mouse_position((position.x, position.y))
+                state.update_mouse_position((position.x, position.y));
             }
             _ => {}
         }
