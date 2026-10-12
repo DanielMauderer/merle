@@ -19,7 +19,8 @@ pub struct State {
     window: Arc<Window>,
     gpu: Gpu,
     image_view: ImageView,
-    mouse_is_pressed: bool,
+    pan_enabled: bool,
+    cursor_position: (f64, f64),
 }
 
 impl State {
@@ -29,17 +30,20 @@ impl State {
         let image_view = ImageView::new(&gpu.device, gpu.format());
 
         let size = window.inner_size();
-        let mut state = Self { window, gpu, image_view, mouse_is_pressed: false };
+        let mut state =
+            Self { window, gpu, image_view, pan_enabled: false, cursor_position: (0.0, 0.0) };
         state.resize(size.width, size.height);
         Ok(state)
     }
 
-    pub fn set_mouse_state(&mut self, state: bool) {
-        self.mouse_is_pressed = state;
+    #[instrument(name = "State::begin_mouse_pan", skip_all)]
+    pub fn begin_mouse_pan(&mut self) {
+        self.pan_enabled = true;
     }
 
-    pub fn mouse_key_state(&self) -> bool {
-        self.mouse_is_pressed
+    #[instrument(name = "State::end_mouse_pan", skip_all)]
+    pub fn end_mouse_pan(&mut self) {
+        self.pan_enabled = false;
     }
 
     pub fn set_image(&mut self, image: &MerleImage) {
@@ -77,10 +81,14 @@ impl State {
         self.gpu.render(|render_pass| self.image_view.draw(render_pass))
     }
 
-    pub fn move_pixels(&mut self, pixels: (f64, f64)) {
-        let scaling = self.window.scale_factor() * 2.0;
-        self.image_view.move_pixel(&self.gpu.queue, pixels, scaling);
-        self.window.request_redraw();
+    pub fn update_mouse_position(&mut self, pixels: (f64, f64)) {
+        if self.pan_enabled {
+            let delta = ( pixels.0 - self.cursor_position.0, pixels.1 - self.cursor_position.1);
+            let scaling = self.window.scale_factor();
+            self.image_view.move_pixel(&self.gpu.queue, delta, scaling);
+            self.window.request_redraw();
+        }
+        self.cursor_position = pixels;
     }
 }
 
@@ -177,29 +185,15 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                     return;
                 }
                 let Some(state) = &mut self.state else { return };
-                state.set_mouse_state(button_state == ElementState::Pressed);
+                match button_state {
+                    ElementState::Pressed => state.begin_mouse_pan(),
+                    ElementState::Released => state.end_mouse_pan(),
+                }
             }
             WindowEvent::CursorMoved { device_id: _, position } => {
-                let (x, y) = (position.x, position.y);
-                info!(x, y, "(x|y) mouse moved");
-            }
-            _ => {}
-        }
-    }
+                let Some(state) = &mut self.state else { return };
 
-    fn device_event(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        _device_id: DeviceId,
-        event: DeviceEvent,
-    ) {
-        let Some(state) = &mut self.state else { return };
-        match event {
-            DeviceEvent::MouseMotion { delta } => {
-                if !state.mouse_key_state() {
-                    return;
-                }
-                state.move_pixels(delta);
+                state.update_mouse_position((position.x, position.y))
             }
             _ => {}
         }
