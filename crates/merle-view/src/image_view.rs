@@ -50,6 +50,7 @@ struct ImageUniform {
 }
 
 impl ImageUniform {
+    #[instrument(name = "ImageUniform::new")]
     fn new(target: (u32, u32), image: (u32, u32), zoom: f32, center: (f32, f32)) -> Self {
         Self { scale: aspect_scale(target, image), zoom: [zoom; 2], center: [center.0, center.1] }
     }
@@ -68,6 +69,10 @@ fn aspect_scale((win_w, win_h): (u32, u32), (img_w, img_h): (u32, u32)) -> [f32;
     } else {
         [1.0, window_aspect / image_aspect]
     }
+}
+
+fn pixel_to_relative((win_w, win_h): (u32, u32), scalling: f64) -> (f64, f64) {
+    (scalling / win_w as f64, scalling / win_h as f64)
 }
 
 #[derive(Debug)]
@@ -226,14 +231,16 @@ impl ImageView {
     }
 
     #[instrument(level = "trace", skip(self, queue))]
-    pub fn move_x(&mut self, queue: &wgpu::Queue, delta: f32) {
-        self.center.1 += delta;
+    pub fn move_pixel(&mut self, queue: &wgpu::Queue, pixels: (f64, f64), scaling: f64) {
+        let aspect = pixel_to_relative(self.target_size, scaling);
+        self.center.0 += (pixels.0 * aspect.0) as f32;
+        self.center.1 -= (pixels.1 * aspect.1) as f32;
         self.write_uniform(queue);
     }
-
     #[instrument(level = "trace", skip(self, queue))]
-    pub fn move_y(&mut self, queue: &wgpu::Queue, delta: f32) {
-        self.center.0 += delta;
+    pub fn move_relative(&mut self, queue: &wgpu::Queue, delta: (f32, f32)) {
+        self.center.0 += delta.0;
+        self.center.1 += delta.1;
         self.write_uniform(queue);
     }
 

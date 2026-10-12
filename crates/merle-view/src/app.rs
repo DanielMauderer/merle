@@ -3,7 +3,9 @@ use crate::gpu::Gpu;
 use crate::image_view::ImageView;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
+use tracing::info;
 use tracing::instrument;
+use winit::event::{DeviceEvent, DeviceId, MouseScrollDelta};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -17,6 +19,7 @@ pub struct State {
     window: Arc<Window>,
     gpu: Gpu,
     image_view: ImageView,
+    mouse_is_pressed: bool,
 }
 
 impl State {
@@ -26,9 +29,17 @@ impl State {
         let image_view = ImageView::new(&gpu.device, gpu.format());
 
         let size = window.inner_size();
-        let mut state = Self { window, gpu, image_view };
+        let mut state = Self { window, gpu, image_view, mouse_is_pressed: false };
         state.resize(size.width, size.height);
         Ok(state)
+    }
+
+    pub fn set_mouse_state(&mut self, state: bool) {
+        self.mouse_is_pressed = state;
+    }
+
+    pub fn mouse_key_state(&self) -> bool {
+        self.mouse_is_pressed
     }
 
     pub fn set_image(&mut self, image: &MerleImage) {
@@ -42,13 +53,8 @@ impl State {
         self.window.request_redraw();
     }
 
-    pub fn move_x(&mut self, delta: f32) {
-        self.image_view.move_x(&self.gpu.queue, delta);
-        self.window.request_redraw();
-    }
-
-    pub fn move_y(&mut self, delta: f32) {
-        self.image_view.move_y(&self.gpu.queue, delta);
+    pub fn move_relative(&mut self, delta: (f32, f32)) {
+        self.image_view.move_relative(&self.gpu.queue, delta);
         self.window.request_redraw();
     }
 
@@ -69,6 +75,12 @@ impl State {
 
     pub fn render(&mut self) -> Result<(), GpuError> {
         self.gpu.render(|render_pass| self.image_view.draw(render_pass))
+    }
+
+    pub fn move_pixels(&mut self, pixels: (f64, f64)) {
+        let scaling = self.window.scale_factor() * 2.0;
+        self.image_view.move_pixel(&self.gpu.queue, pixels, scaling);
+        self.window.request_redraw();
     }
 }
 
@@ -144,21 +156,41 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 (KeyCode::KeyQ, true) => {
                     event_loop.exit();
                 }
-                (KeyCode::KeyW, true) => state.move_x(-0.1),
-                (KeyCode::KeyS, true) => state.move_x(0.1),
-                (KeyCode::KeyA, true) => state.move_y(0.1),
-                (KeyCode::KeyD, true) => state.move_y(-0.1),
+                (KeyCode::KeyW, true) => state.move_relative((-0.1, 0.0)),
+                (KeyCode::KeyS, true) => state.move_relative((0.1, 0.0)),
+                (KeyCode::KeyA, true) => state.move_relative((0.0, 0.1)),
+                (KeyCode::KeyD, true) => state.move_relative((0.0, -0.1)),
                 (KeyCode::KeyR, true) => state.reset(),
                 (KeyCode::KeyC, true) => state.center(),
                 _ => (),
             },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
                 let change = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, x) => x,
+                    MouseScrollDelta::LineDelta(_, y) => y,
                     #[allow(clippy::cast_possible_truncation)]
-                    winit::event::MouseScrollDelta::PixelDelta(d) => d.x as f32,
+                    MouseScrollDelta::PixelDelta(d) => d.y as f32,
                 };
                 state.zoom(change);
+            }
+            _ => {}
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        let Some(state) = &mut self.state else { return };
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                let (x, y) = (delta.0, delta.1);
+                info!(x, y, "(x|y) mouse moved");
+                if !state.mouse_key_state() {
+                    return;
+                }
+                state.move_pixels((x, y));
             }
             _ => {}
         }
