@@ -3,9 +3,8 @@ use crate::gpu::Gpu;
 use crate::image_view::ImageView;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
-use tracing::info;
 use tracing::instrument;
-use winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, MouseScrollDelta};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
