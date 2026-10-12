@@ -71,8 +71,9 @@ fn aspect_scale((win_w, win_h): (u32, u32), (img_w, img_h): (u32, u32)) -> [f32;
     }
 }
 
-fn pixel_to_relative((win_w, win_h): (u32, u32), scalling: f64) -> (f64, f64) {
-    (scalling / win_w as f64, scalling / win_h as f64)
+/// Size of one physical pixel in NDC units (NDC spans -1..1, i.e. 2 units per axis).
+fn pixel_to_relative((win_w, win_h): (u32, u32)) -> (f64, f64) {
+    (2.0 / f64::from(win_w), 2.0 / f64::from(win_h))
 }
 
 #[derive(Debug)]
@@ -231,8 +232,8 @@ impl ImageView {
     }
 
     #[instrument(level = "trace", skip(self, queue))]
-    pub fn move_pixel(&mut self, queue: &wgpu::Queue, pixels: (f64, f64), scaling: f64) {
-        let aspect = pixel_to_relative(self.target_size, scaling);
+    pub fn move_pixel(&mut self, queue: &wgpu::Queue, pixels: (f64, f64)) {
+        let aspect = pixel_to_relative(self.target_size);
         self.center.0 += (pixels.0 * aspect.0) as f32;
         self.center.1 -= (pixels.1 * aspect.1) as f32;
         self.write_uniform(queue);

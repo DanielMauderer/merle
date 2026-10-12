@@ -84,8 +84,7 @@ impl State {
     pub fn update_mouse_position(&mut self, pixels: (f64, f64)) {
         if self.pan_enabled {
             let delta = ( pixels.0 - self.cursor_position.0, pixels.1 - self.cursor_position.1);
-            let scaling = self.window.scale_factor();
-            self.image_view.move_pixel(&self.gpu.queue, delta, scaling);
+            self.image_view.move_pixel(&self.gpu.queue, delta);
             self.window.request_redraw();
         }
         self.cursor_position = pixels;
