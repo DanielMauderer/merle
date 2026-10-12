@@ -5,7 +5,7 @@ use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
 use tracing::info;
 use tracing::instrument;
-use winit::event::{DeviceEvent, DeviceId, MouseScrollDelta};
+use winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, MouseScrollDelta};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -172,6 +172,17 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 };
                 state.zoom(change);
             }
+            WindowEvent::MouseInput { device_id: _, state: button_state, button } => {
+                if button != MouseButton::Left {
+                    return;
+                }
+                let Some(state) = &mut self.state else { return };
+                state.set_mouse_state(button_state == ElementState::Pressed);
+            }
+            WindowEvent::CursorMoved { device_id: _, position } => {
+                let (x, y) = (position.x, position.y);
+                info!(x, y, "(x|y) mouse moved");
+            }
             _ => {}
         }
     }
@@ -185,12 +196,10 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
         let Some(state) = &mut self.state else { return };
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                let (x, y) = (delta.0, delta.1);
-                info!(x, y, "(x|y) mouse moved");
                 if !state.mouse_key_state() {
                     return;
                 }
-                state.move_pixels((x, y));
+                state.move_pixels(delta);
             }
             _ => {}
         }
