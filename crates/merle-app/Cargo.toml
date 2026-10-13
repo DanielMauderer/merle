@@ -7,6 +7,7 @@ rust-version.workspace = true
 license = "GPL-3.0-or-later"
 repository.workspace = true
 authors.workspace = true
+publish = false
 
 [dependencies]
 merle-photo.workspace = true
