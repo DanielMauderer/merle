@@ -217,6 +217,19 @@ impl ImageView {
     }
 
     #[instrument(level = "trace", skip(self, queue))]
+    pub fn reset(&mut self, queue: &wgpu::Queue) {
+        self.center = (0.0, 0.0);
+        self.zoom_state = 1.0;
+        self.write_uniform(queue);
+    }
+
+    #[instrument(level = "trace", skip(self, queue))]
+    pub fn center(&mut self, queue: &wgpu::Queue) {
+        self.center = (0.0, 0.0);
+        self.write_uniform(queue);
+    }
+
+    #[instrument(level = "trace", skip(self, queue))]
     pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
         self.target_size = (width, height);
         self.write_uniform(queue);

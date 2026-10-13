@@ -66,6 +66,16 @@ impl State {
         self.window.request_redraw();
     }
 
+    pub fn center(&mut self) {
+        self.image_view.center(&self.gpu.queue);
+        self.window.request_redraw();
+    }
+
+    pub fn reset(&mut self) {
+        self.image_view.reset(&self.gpu.queue);
+        self.window.request_redraw();
+    }
+
     pub fn render(&mut self) -> Result<(), GpuError> {
         self.gpu.render(|render_pass| self.image_view.draw(render_pass))
     }
@@ -156,6 +166,8 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 (KeyCode::KeyS, true) => state.move_relative((0.1, 0.0)),
                 (KeyCode::KeyA, true) => state.move_relative((0.0, 0.1)),
                 (KeyCode::KeyD, true) => state.move_relative((0.0, -0.1)),
+                (KeyCode::KeyR, true) => state.reset(),
+                (KeyCode::KeyC, true) => state.center(),
                 _ => (),
             },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
