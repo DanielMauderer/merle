@@ -4,7 +4,7 @@ use crate::image_view::ImageView;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
 use tracing::instrument;
-use winit::event::MouseScrollDelta;
+use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -18,6 +18,8 @@ pub struct State {
     window: Arc<Window>,
     gpu: Gpu,
     image_view: ImageView,
+    pan_enabled: bool,
+    cursor_position: (f64, f64),
 }
 
 impl State {
@@ -27,9 +29,20 @@ impl State {
         let image_view = ImageView::new(&gpu.device, gpu.format());
 
         let size = window.inner_size();
-        let mut state = Self { window, gpu, image_view };
+        let mut state =
+            Self { window, gpu, image_view, pan_enabled: false, cursor_position: (0.0, 0.0) };
         state.resize(size.width, size.height);
         Ok(state)
+    }
+
+    #[instrument(name = "State::begin_mouse_pan", skip_all)]
+    pub fn begin_mouse_pan(&mut self) {
+        self.pan_enabled = true;
+    }
+
+    #[instrument(name = "State::end_mouse_pan", skip_all)]
+    pub fn end_mouse_pan(&mut self) {
+        self.pan_enabled = false;
     }
 
     pub fn set_image(&mut self, image: &MerleImage) {
@@ -55,6 +68,15 @@ impl State {
 
     pub fn render(&mut self) -> Result<(), GpuError> {
         self.gpu.render(|render_pass| self.image_view.draw(render_pass))
+    }
+
+    pub fn update_mouse_position(&mut self, pixels: (f64, f64)) {
+        if self.pan_enabled {
+            let delta = (pixels.0 - self.cursor_position.0, pixels.1 - self.cursor_position.1);
+            self.image_view.move_pixel(&self.gpu.queue, delta);
+            self.window.request_redraw();
+        }
+        self.cursor_position = pixels;
     }
 }
 
@@ -143,6 +165,21 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                     MouseScrollDelta::PixelDelta(d) => d.y as f32,
                 };
                 state.zoom(change);
+            }
+            WindowEvent::MouseInput { device_id: _, state: button_state, button } => {
+                if button != MouseButton::Left {
+                    return;
+                }
+                let Some(state) = &mut self.state else { return };
+                match button_state {
+                    ElementState::Pressed => state.begin_mouse_pan(),
+                    ElementState::Released => state.end_mouse_pan(),
+                }
+            }
+            WindowEvent::CursorMoved { device_id: _, position } => {
+                let Some(state) = &mut self.state else { return };
+
+                state.update_mouse_position((position.x, position.y));
             }
             _ => {}
         }
