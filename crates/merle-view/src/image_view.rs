@@ -213,11 +213,11 @@ impl ImageView {
     #[instrument(level = "trace", skip(self, queue))]
     pub fn zoom(&mut self, queue: &wgpu::Queue, delta: f32) {
         let lower_limit = 0.5;
-        let uppler_limit = 10.0;
+        let upper_limit = 10.0;
         self.zoom_state += delta * 0.1;
         match self.zoom_state {
             zoom if zoom < lower_limit => self.zoom_state = lower_limit,
-            zoom if zoom > uppler_limit => self.zoom_state = uppler_limit,
+            zoom if zoom > upper_limit => self.zoom_state = upper_limit,
             _ => {}
         }
         info!(self.zoom_state, "scale");
