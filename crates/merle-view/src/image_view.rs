@@ -1,5 +1,5 @@
 use merle_photo::MerleImage;
-use tracing::{debug, debug_span, instrument};
+use tracing::{debug, debug_span, info, instrument};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -31,37 +31,38 @@ impl Vertex {
 }
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.9, -0.9, 0.0], tex_coords: [0.0, 1.0] },
-    Vertex { position: [-0.9, 0.9, 0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [0.9, -0.9, 0.0], tex_coords: [1.0, 1.0] },
-    Vertex { position: [0.9, 0.9, 0.0], tex_coords: [1.0, 0.0] },
+    Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 1.0] },
+    Vertex { position: [-1.0, 1.0, 0.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [1.0, -1.0, 0.0], tex_coords: [1.0, 1.0] },
+    Vertex { position: [1.0, 1.0, 0.0], tex_coords: [1.0, 0.0] },
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 1, 2, 3];
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "INDICES len is 6 elements")]
 const N_INDICES: u32 = INDICES.len() as u32;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct ImageUniform {
     scale: [f32; 2],
-    _pad: [f32; 2],
+    zoom: [f32; 2],
 }
 
 impl ImageUniform {
-    fn new(target: (u32, u32), image: (u32, u32)) -> Self {
-        Self { scale: aspect_scale(target, image), _pad: [0.0; 2] }
+    #[instrument(name = "ImageUniform::new")]
+    #[expect(clippy::cast_possible_truncation, reason = "GPU needs f32 values are in NDC range")]
+    fn new(target: (u32, u32), image: (u32, u32), zoom: f32) -> Self {
+        let scale = aspect_scale(target, image);
+        Self { scale: [scale[0] as f32, scale[1] as f32], zoom: [zoom; 2] }
     }
 }
 
-fn aspect_scale((win_w, win_h): (u32, u32), (img_w, img_h): (u32, u32)) -> [f32; 2] {
+fn aspect_scale((win_w, win_h): (u32, u32), (img_w, img_h): (u32, u32)) -> [f64; 2] {
     if win_w == 0 || win_h == 0 || img_w == 0 || img_h == 0 {
         return [1.0, 1.0];
     }
-    #[allow(clippy::cast_precision_loss)]
-    let window_aspect = win_w as f32 / win_h as f32;
-    #[allow(clippy::cast_precision_loss)]
-    let image_aspect = img_w as f32 / img_h as f32;
+    let window_aspect = f64::from(win_w) / f64::from(win_h);
+    let image_aspect = f64::from(img_w) / f64::from(img_h);
     if window_aspect > image_aspect {
         [image_aspect / window_aspect, 1.0]
     } else {
@@ -81,6 +82,7 @@ pub struct ImageView {
     texture_bind_group: Option<wgpu::BindGroup>,
     image_dimensions: (u32, u32),
     target_size: (u32, u32),
+    zoom_state: f32,
 }
 
 impl ImageView {
@@ -103,7 +105,7 @@ impl ImageView {
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Image Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[ImageUniform::new((0, 0), (0, 0))]),
+            contents: bytemuck::cast_slice(&[ImageUniform::new((0, 0), (0, 0), 1.0)]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -142,6 +144,7 @@ impl ImageView {
             texture_bind_group: None,
             image_dimensions: (0, 0),
             target_size: (0, 0),
+            zoom_state: 1.0,
         }
     }
 
@@ -207,6 +210,20 @@ impl ImageView {
         self.write_uniform(queue);
     }
 
+    #[instrument(level = "trace", skip(self, queue))]
+    pub fn zoom(&mut self, queue: &wgpu::Queue, delta: f32) {
+        let lower_limit = 0.5;
+        let uppler_limit = 10.0;
+        self.zoom_state += delta * 0.1;
+        match self.zoom_state {
+            zoom if zoom < lower_limit => self.zoom_state = lower_limit,
+            zoom if zoom > uppler_limit => self.zoom_state = uppler_limit,
+            _ => {}
+        }
+        info!(self.zoom_state, "scale");
+        self.write_uniform(queue);
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         let Some(texture_bind_group) = &self.texture_bind_group else { return };
@@ -220,7 +237,7 @@ impl ImageView {
     }
 
     fn write_uniform(&self, queue: &wgpu::Queue) {
-        let uniform = ImageUniform::new(self.target_size, self.image_dimensions);
+        let uniform = ImageUniform::new(self.target_size, self.image_dimensions, self.zoom_state);
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 }

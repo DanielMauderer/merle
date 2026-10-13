@@ -4,6 +4,7 @@ use crate::image_view::ImageView;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
 use tracing::instrument;
+use winit::event::MouseScrollDelta;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -39,6 +40,11 @@ impl State {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.gpu.resize(width, height);
         self.image_view.resize(&self.gpu.queue, width, height);
+        self.window.request_redraw();
+    }
+
+    pub fn zoom(&mut self, delta: f32) {
+        self.image_view.zoom(&self.gpu.queue, delta);
         self.window.request_redraw();
     }
 
@@ -119,6 +125,14 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 if let (KeyCode::KeyQ, true) = (code, key_state.is_pressed()) {
                     event_loop.exit();
                 }
+            }
+            WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
+                let change = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    #[expect(clippy::cast_possible_truncation, reason = "scroll delta is small")]
+                    MouseScrollDelta::PixelDelta(d) => d.y as f32,
+                };
+                state.zoom(change);
             }
             _ => {}
         }
