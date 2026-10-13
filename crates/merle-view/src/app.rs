@@ -43,6 +43,11 @@ impl State {
         self.window.request_redraw();
     }
 
+    pub fn move_relative(&mut self, delta: (f32, f32)) {
+        self.image_view.move_relative(&self.gpu.queue, delta);
+        self.window.request_redraw();
+    }
+
     pub fn zoom(&mut self, delta: f32) {
         self.image_view.zoom(&self.gpu.queue, delta);
         self.window.request_redraw();
@@ -121,11 +126,16 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
             WindowEvent::KeyboardInput {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..
-            } => {
-                if let (KeyCode::KeyQ, true) = (code, key_state.is_pressed()) {
+            } => match (code, key_state.is_pressed()) {
+                (KeyCode::KeyQ, true) => {
                     event_loop.exit();
                 }
-            }
+                (KeyCode::KeyW, true) => state.move_relative((-0.1, 0.0)),
+                (KeyCode::KeyS, true) => state.move_relative((0.1, 0.0)),
+                (KeyCode::KeyA, true) => state.move_relative((0.0, 0.1)),
+                (KeyCode::KeyD, true) => state.move_relative((0.0, -0.1)),
+                _ => (),
+            },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
                 let change = match delta {
                     MouseScrollDelta::LineDelta(_, y) => y,
