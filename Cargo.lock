@@ -1474,6 +1474,7 @@ name = "merle-loader"
 version = "0.1.0"
 dependencies = [
  "merle-photo",
+ "tracing",
 ]
 
 [[package]]
