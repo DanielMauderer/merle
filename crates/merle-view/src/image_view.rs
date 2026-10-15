@@ -1,6 +1,8 @@
 use merle_photo::MerleImage;
-use tracing::{debug, debug_span, instrument, trace};
+use tracing::{debug, debug_span, instrument};
 use wgpu::util::DeviceExt;
+
+use crate::viewport::Viewport;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -45,18 +47,20 @@ const N_INDICES: u32 = INDICES.len() as u32;
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct ImageUniform {
     scale: [f32; 2],
-    zoom: [f32; 2],
+    zoom: f32,
+    _pad: f32,
     center: [f32; 2],
 }
 
 impl ImageUniform {
     #[instrument(name = "ImageUniform::new", level = "trace")]
     #[expect(clippy::cast_possible_truncation, reason = "GPU needs f32 values are in NDC range")]
-    fn new(target: (u32, u32), image: (u32, u32), zoom: f32, center: (f64, f64)) -> Self {
+    fn new(target: (u32, u32), image: (u32, u32), zoom: f64, center: (f64, f64)) -> Self {
         let scale = aspect_scale(target, image);
         Self {
             scale: [scale[0] as f32, scale[1] as f32],
-            zoom: [zoom; 2],
+            zoom: zoom as f32,
+            _pad: 0.0,
             center: [center.0 as f32, center.1 as f32],
         }
     }
@@ -75,11 +79,6 @@ fn aspect_scale((win_w, win_h): (u32, u32), (img_w, img_h): (u32, u32)) -> [f64;
     }
 }
 
-/// Size of one physical pixel in NDC units (NDC spans -1..1, i.e. 2 units per axis).
-fn pixel_to_relative((win_w, win_h): (u32, u32)) -> (f64, f64) {
-    (2.0 / f64::from(win_w), 2.0 / f64::from(win_h))
-}
-
 #[derive(Debug)]
 pub struct ImageView {
     render_pipeline: wgpu::RenderPipeline,
@@ -91,9 +90,6 @@ pub struct ImageView {
     uniform_bind_group: wgpu::BindGroup,
     texture_bind_group: Option<wgpu::BindGroup>,
     image_dimensions: (u32, u32),
-    target_size: (u32, u32),
-    zoom_state: f32,
-    center: (f64, f64),
 }
 
 impl ImageView {
@@ -154,9 +150,6 @@ impl ImageView {
             uniform_bind_group,
             texture_bind_group: None,
             image_dimensions: (0, 0),
-            target_size: (0, 0),
-            zoom_state: 1.0,
-            center: (0.0, 0.0),
         }
     }
 
@@ -213,54 +206,6 @@ impl ImageView {
             label: Some("image_texture_bind_group"),
         }));
         self.image_dimensions = (width, height);
-        self.write_uniform(queue);
-    }
-
-    #[instrument(level = "trace", skip(self, queue))]
-    pub fn reset(&mut self, queue: &wgpu::Queue) {
-        self.center = (0.0, 0.0);
-        self.zoom_state = 1.0;
-        self.write_uniform(queue);
-    }
-
-    #[instrument(level = "trace", skip(self, queue))]
-    pub fn center(&mut self, queue: &wgpu::Queue) {
-        self.center = (0.0, 0.0);
-        self.write_uniform(queue);
-    }
-
-    #[instrument(level = "trace", skip(self, queue))]
-    pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
-        self.target_size = (width, height);
-        self.write_uniform(queue);
-    }
-
-    #[instrument(level = "trace", skip(self, queue))]
-    pub fn move_pixel(&mut self, queue: &wgpu::Queue, pixels: (f64, f64)) {
-        let aspect = pixel_to_relative(self.target_size);
-        self.center.0 += pixels.0 * aspect.0;
-        self.center.1 -= pixels.1 * aspect.1;
-        self.write_uniform(queue);
-    }
-    #[instrument(level = "trace", skip(self, queue))]
-    pub fn move_relative(&mut self, queue: &wgpu::Queue, delta: (f32, f32)) {
-        self.center.0 += f64::from(delta.0);
-        self.center.1 += f64::from(delta.1);
-        self.write_uniform(queue);
-    }
-
-    #[instrument(level = "trace", skip(self, queue))]
-    pub fn zoom(&mut self, queue: &wgpu::Queue, delta: f32) {
-        let lower_limit = 0.5;
-        let upper_limit = 10.0;
-        self.zoom_state += delta * 0.1;
-        match self.zoom_state {
-            zoom if zoom < lower_limit => self.zoom_state = lower_limit,
-            zoom if zoom > upper_limit => self.zoom_state = upper_limit,
-            _ => {}
-        }
-        trace!(self.zoom_state, "scale");
-        self.write_uniform(queue);
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -275,12 +220,12 @@ impl ImageView {
         render_pass.draw_indexed(0..N_INDICES, 0, 0..1);
     }
 
-    fn write_uniform(&self, queue: &wgpu::Queue) {
+    pub fn write_uniform(&self, queue: &wgpu::Queue, viewport: &Viewport) {
         let uniform = ImageUniform::new(
-            self.target_size,
+            viewport.target_size,
             self.image_dimensions,
-            self.zoom_state,
-            self.center,
+            viewport.zoom,
+            viewport.center,
         );
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }

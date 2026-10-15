@@ -1,6 +1,7 @@
 use crate::error::{Error, GpuError};
 use crate::gpu::Gpu;
 use crate::image_view::ImageView;
+use crate::viewport::Viewport;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
 use tracing::instrument;
@@ -20,6 +21,7 @@ pub struct State {
     image_view: ImageView,
     pan_enabled: bool,
     cursor_position: (f64, f64),
+    viewport: Viewport,
 }
 
 impl State {
@@ -29,8 +31,14 @@ impl State {
         let image_view = ImageView::new(&gpu.device, gpu.format());
 
         let size = window.inner_size();
-        let mut state =
-            Self { window, gpu, image_view, pan_enabled: false, cursor_position: (0.0, 0.0) };
+        let mut state = Self {
+            window,
+            gpu,
+            image_view,
+            pan_enabled: false,
+            cursor_position: (0.0, 0.0),
+            viewport: Viewport::default(),
+        };
         state.resize(size.width, size.height);
         Ok(state)
     }
@@ -52,38 +60,39 @@ impl State {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.gpu.resize(width, height);
-        self.image_view.resize(&self.gpu.queue, width, height);
+        self.viewport.resize(width, height);
         self.window.request_redraw();
     }
 
-    pub fn move_relative(&mut self, delta: (f32, f32)) {
-        self.image_view.move_relative(&self.gpu.queue, delta);
+    pub fn move_relative(&mut self, delta: (f64, f64)) {
+        self.viewport.move_relative(delta);
         self.window.request_redraw();
     }
 
-    pub fn zoom(&mut self, delta: f32) {
-        self.image_view.zoom(&self.gpu.queue, delta);
+    pub fn zoom(&mut self, delta: f64) {
+        self.viewport.zoom(delta);
         self.window.request_redraw();
     }
 
     pub fn center(&mut self) {
-        self.image_view.center(&self.gpu.queue);
+        self.viewport.center();
         self.window.request_redraw();
     }
 
     pub fn reset(&mut self) {
-        self.image_view.reset(&self.gpu.queue);
+        self.viewport.reset();
         self.window.request_redraw();
     }
 
     pub fn render(&mut self) -> Result<(), GpuError> {
+        self.image_view.write_uniform(&self.gpu.queue, &self.viewport);
         self.gpu.render(|render_pass| self.image_view.draw(render_pass))
     }
 
     pub fn update_mouse_position(&mut self, pixels: (f64, f64)) {
         if self.pan_enabled {
             let delta = (pixels.0 - self.cursor_position.0, pixels.1 - self.cursor_position.1);
-            self.image_view.move_pixel(&self.gpu.queue, delta);
+            self.viewport.move_pixel(delta);
             self.window.request_redraw();
         }
         self.cursor_position = pixels;
@@ -159,9 +168,7 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 event: KeyEvent { physical_key: PhysicalKey::Code(code), state: key_state, .. },
                 ..
             } => match (code, key_state.is_pressed()) {
-                (KeyCode::KeyQ, true) => {
-                    event_loop.exit();
-                }
+                (KeyCode::KeyQ, true) => event_loop.exit(),
                 (KeyCode::KeyW, true) => state.move_relative((-0.1, 0.0)),
                 (KeyCode::KeyS, true) => state.move_relative((0.1, 0.0)),
                 (KeyCode::KeyA, true) => state.move_relative((0.0, 0.1)),
@@ -172,9 +179,8 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
             },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
                 let change = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => y,
-                    #[expect(clippy::cast_possible_truncation, reason = "scroll delta is small")]
-                    MouseScrollDelta::PixelDelta(d) => d.y as f32,
+                    MouseScrollDelta::LineDelta(_, y) => f64::from(y),
+                    MouseScrollDelta::PixelDelta(d) => d.y,
                 };
                 state.zoom(change);
             }
