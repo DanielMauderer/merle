@@ -54,8 +54,20 @@ impl Viewport {
     pub fn zoom(&mut self, delta: f64, zoom_point: (f64, f64)) {
         let lower_limit = 0.5;
         let upper_limit = 10.0;
+        let old_zoom = self.zoom;
         self.zoom = (self.zoom + delta * 0.1).clamp(lower_limit, upper_limit);
-        self.move_to_pixel((zoom_point.0 / 2.0, zoom_point.1 / 2.0));
+
+        if self.zoom <= lower_limit {
+            self.center.0 = 0.0;
+            self.center.1 = 0.0;
+            return;
+        }
+        let aspect = pixel_to_windows(self.target_size);
+        let point = (zoom_point.0 * aspect.0 - 1.0, 1.0 - zoom_point.1 * aspect.1);
+
+        let factor = self.zoom / old_zoom;
+        self.center.0 = point.0 - (point.0 - self.center.0) * factor;
+        self.center.1 = point.1 - (point.1 - self.center.1) * factor;
         trace!(self.zoom, "scale");
     }
 }

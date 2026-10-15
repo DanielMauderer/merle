@@ -23,6 +23,7 @@ impl Pointer {
         self.dragging.then_some(delta)
     }
 
+    #[must_use]
     pub fn position(&self) -> (f64, f64) {
         self.position
     }
