@@ -169,10 +169,10 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 ..
             } => match (code, key_state.is_pressed()) {
                 (KeyCode::KeyQ, true) => event_loop.exit(),
-                (KeyCode::KeyW, true) => state.move_relative((-0.1, 0.0)),
-                (KeyCode::KeyS, true) => state.move_relative((0.1, 0.0)),
-                (KeyCode::KeyA, true) => state.move_relative((0.0, 0.1)),
-                (KeyCode::KeyD, true) => state.move_relative((0.0, -0.1)),
+                (KeyCode::KeyW, true) => state.move_relative((0.0, -0.1)),
+                (KeyCode::KeyS, true) => state.move_relative((0.0, 0.1)),
+                (KeyCode::KeyA, true) => state.move_relative((0.1, 0.0)),
+                (KeyCode::KeyD, true) => state.move_relative((-0.1, 0.0)),
                 (KeyCode::KeyR, true) => state.reset(),
                 (KeyCode::KeyC, true) => state.center(),
                 _ => (),

@@ -1,6 +1,6 @@
 use tracing::{instrument, trace};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Viewport {
     pub target_size: (u32, u32),
     pub zoom: f64,
@@ -27,13 +27,14 @@ impl Viewport {
     #[instrument(level = "trace", skip(self,))]
     pub fn move_pixel(&mut self, pixels: (f64, f64)) {
         let aspect = pixel_to_relative(self.target_size);
-        let delta =  (pixels.0 * aspect.0, -pixels.1 * aspect.1);
+        let delta = (pixels.0 * aspect.0, -pixels.1 * aspect.1);
         self.move_relative(delta);
     }
 
     #[instrument(level = "trace", skip(self,))]
     pub fn move_relative(&mut self, delta: (f64, f64)) {
-        self.center = delta;
+        self.center.0 += delta.0;
+        self.center.1 += delta.1;
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -47,6 +48,12 @@ impl Viewport {
             _ => {}
         }
         trace!(self.zoom, "scale");
+    }
+}
+
+impl Default for Viewport {
+    fn default() -> Self {
+        Self { target_size: (0, 0), zoom: 1.0, center: (0.0, 0.0) }
     }
 }
 
