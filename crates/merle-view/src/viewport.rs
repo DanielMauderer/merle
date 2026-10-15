@@ -41,12 +41,8 @@ impl Viewport {
     pub fn zoom(&mut self, delta: f64) {
         let lower_limit = 0.5;
         let upper_limit = 10.0;
-        self.zoom += delta * 0.1;
-        match self.zoom {
-            zoom if zoom < lower_limit => self.zoom = lower_limit,
-            zoom if zoom > upper_limit => self.zoom = upper_limit,
-            _ => {}
-        }
+        self.zoom = (self.zoom + delta * 0.1).clamp(lower_limit, upper_limit);
+
         trace!(self.zoom, "scale");
     }
 }
