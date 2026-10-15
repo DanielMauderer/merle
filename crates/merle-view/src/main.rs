@@ -6,6 +6,7 @@
 // any later version. See the LICENSE-GPL file for the full text.
 
 //! Minimal image viewer.
+use merle_loader::MerleLoader;
 use merle_photo::{MerleImage, PhotoError};
 use std::env;
 use std::iter;
@@ -58,17 +59,21 @@ fn main() -> ExitCode {
 
 fn start_app() -> Result<(), Error> {
     let mut args = env::args_os().skip(1);
-    let (Some(from), Some(dir), None) = (args.next(), args.next(), args.next()) else { return Err(Error::Usage) };
+    let (Some(from), Some(dir), None) = (args.next(), args.next(), args.next()) else {
+        return Err(Error::Usage);
+    };
     let event_loop = EventLoop::<Result<MerleImage, PhotoError>>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
+    let proxy_1 = event_loop.create_proxy();
+    let proxy_2 = event_loop.create_proxy();
 
-    let proxy = event_loop.create_proxy();
-    thread::spawn(move || {
-        let image = MerleImage::open(Path::new(&from)).map(MerleImage::into_rgba8);
-        let _ = proxy.send_event(image);
+    let mut loader = MerleLoader::new(&dir.to_str().unwrap(), move |image| {
+        proxy_1.send_event(Ok(image));
     });
 
-    let mut app = app::App::new(&dir.to_str().unwrap(), event_loop.create_proxy());
+    loader.load_image(&from.to_str().unwrap());
+
+    let mut app = app::App::new(loader);
     info!("entering event loop");
     event_loop.run_app(&mut app)?;
     app.take_error().map_or(Ok(()), Err)

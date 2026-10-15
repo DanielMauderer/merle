@@ -96,33 +96,16 @@ impl State {
     }
 }
 
-#[derive(Debug)]
-pub struct App<F>
-where
-    F: Fn(MerleImage) -> (),
-{
+pub struct App {
     state: Option<State>,
-    loader: MerleLoader<F>,
+    loader: MerleLoader,
     pending: Option<MerleImage>,
     error: Option<Error>,
 }
 
-impl<F> App<F>
-where
-    F: Fn(MerleImage) -> (),
-{
-    pub fn new(base_dir: &str, proxy: EventLoopProxy<Result<MerleImage, PhotoError>>) -> Self
-    where
-        F: Fn(MerleImage) -> (),
-    {
-        Self {
-            state: None,
-            loader: MerleLoader::new(base_dir, move |image| {
-                proxy.send_event(Ok(image));
-            }),
-            pending: None,
-            error: None,
-        }
+impl App {
+    pub fn new(loader: MerleLoader) -> Self {
+        Self { state: None, loader, pending: None, error: None }
     }
     pub fn take_error(&mut self) -> Option<Error> {
         self.error.take()
@@ -134,10 +117,7 @@ where
     }
 }
 
-impl<F> ApplicationHandler<Result<MerleImage, PhotoError>> for App<F>
-where
-    F: Fn(MerleImage) -> (),
-{
+impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             return;
@@ -173,9 +153,7 @@ where
         event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: WindowEvent,
-    ) where
-        F: Fn(MerleImage) -> (),
-    {
+    ) {
         let Some(state) = &mut self.state else { return };
 
         match event {
