@@ -27,6 +27,18 @@ merle does not decode RAW data itself: `merle-photo` uses
 [image](https://crates.io/crates/image) for JPEG/PNG. What merle adds on top
 is reading AF points from the maker notes.
 
+## Installing
+
+```fish
+winget install DanielMauderer.MerleView               # Windows
+nix run github:DanielMauderer/merle                   # Nix (or add it as a flake input)
+cargo install merle-view                              # anywhere with a Rust toolchain
+```
+
+A standalone `merle-view-x86_64-pc-windows-msvc.exe` is attached to every
+[GitHub release](https://github.com/DanielMauderer/merle/releases). On Linux
+the viewer needs a Vulkan driver and Wayland or X11 at runtime.
+
 ## Building
 
 With Nix (devShell provides the toolchain, `cargo-nextest`, `bacon`,
