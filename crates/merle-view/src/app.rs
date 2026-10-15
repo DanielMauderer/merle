@@ -67,7 +67,7 @@ impl State {
     }
 
     pub fn zoom(&mut self, delta: f64) {
-        self.viewport.zoom(delta);
+        self.viewport.zoom(delta, self.pointer.position());
         self.window.request_redraw();
     }
 
