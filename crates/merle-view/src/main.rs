@@ -58,7 +58,7 @@ fn main() -> ExitCode {
 
 fn start_app() -> Result<(), Error> {
     let mut args = env::args_os().skip(1);
-    let (Some(from), None) = (args.next(), args.next()) else { return Err(Error::Usage) };
+    let (Some(from), Some(dir), None) = (args.next(), args.next(), args.next()) else { return Err(Error::Usage) };
     let event_loop = EventLoop::<Result<MerleImage, PhotoError>>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
@@ -68,7 +68,7 @@ fn start_app() -> Result<(), Error> {
         let _ = proxy.send_event(image);
     });
 
-    let mut app = app::App::default();
+    let mut app = app::App::new(&dir.to_str().unwrap(), event_loop.create_proxy());
     info!("entering event loop");
     event_loop.run_app(&mut app)?;
     app.take_error().map_or(Ok(()), Err)

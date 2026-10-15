@@ -3,10 +3,12 @@ use crate::gpu::Gpu;
 use crate::image_view::ImageView;
 use crate::input::Pointer;
 use crate::viewport::Viewport;
+use merle_loader::MerleLoader;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
 use tracing::instrument;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
+use winit::event_loop::EventLoopProxy;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
@@ -94,14 +96,34 @@ impl State {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct App {
+#[derive(Debug)]
+pub struct App<F>
+where
+    F: Fn(MerleImage) -> (),
+{
     state: Option<State>,
+    loader: MerleLoader<F>,
     pending: Option<MerleImage>,
     error: Option<Error>,
 }
 
-impl App {
+impl<F> App<F>
+where
+    F: Fn(MerleImage) -> (),
+{
+    pub fn new(base_dir: &str, proxy: EventLoopProxy<Result<MerleImage, PhotoError>>) -> Self
+    where
+        F: Fn(MerleImage) -> (),
+    {
+        Self {
+            state: None,
+            loader: MerleLoader::new(base_dir, move |image| {
+                proxy.send_event(Ok(image));
+            }),
+            pending: None,
+            error: None,
+        }
+    }
     pub fn take_error(&mut self) -> Option<Error> {
         self.error.take()
     }
@@ -112,7 +134,10 @@ impl App {
     }
 }
 
-impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
+impl<F> ApplicationHandler<Result<MerleImage, PhotoError>> for App<F>
+where
+    F: Fn(MerleImage) -> (),
+{
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             return;
@@ -148,7 +173,9 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
         event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: WindowEvent,
-    ) {
+    ) where
+        F: Fn(MerleImage) -> (),
+    {
         let Some(state) = &mut self.state else { return };
 
         match event {
@@ -170,6 +197,8 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 (KeyCode::KeyD, true) => state.move_relative((-0.1, 0.0)),
                 (KeyCode::KeyR, true) => state.reset(),
                 (KeyCode::KeyC, true) => state.center(),
+                (KeyCode::ArrowRight, true) => self.loader.next().unwrap(),
+                (KeyCode::ArrowLeft, true) => self.loader.prev().unwrap(),
                 _ => (),
             },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
@@ -189,7 +218,7 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 }
             }
             WindowEvent::CursorMoved { device_id: _, position } => {
-                state.update_mouse_position((position.x, position.y));
+                state.update_mouse_position(position.into());
             }
             _ => {}
         }
