@@ -1,5 +1,5 @@
 use merle_photo::MerleImage;
-use tracing::{debug, debug_span, info, instrument};
+use tracing::{debug, debug_span, instrument, trace};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -50,7 +50,7 @@ struct ImageUniform {
 }
 
 impl ImageUniform {
-    #[instrument(name = "ImageUniform::new")]
+    #[instrument(name = "ImageUniform::new", level = "trace")]
     #[expect(clippy::cast_possible_truncation, reason = "GPU needs f32 values are in NDC range")]
     fn new(target: (u32, u32), image: (u32, u32), zoom: f32, center: (f64, f64)) -> Self {
         let scale = aspect_scale(target, image);
@@ -259,7 +259,7 @@ impl ImageView {
             zoom if zoom > uppler_limit => self.zoom_state = uppler_limit,
             _ => {}
         }
-        info!(self.zoom_state, "scale");
+        trace!(self.zoom_state, "scale");
         self.write_uniform(queue);
     }
 

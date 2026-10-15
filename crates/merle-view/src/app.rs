@@ -35,12 +35,12 @@ impl State {
         Ok(state)
     }
 
-    #[instrument(name = "State::begin_mouse_pan", skip_all)]
+    #[instrument(name = "State::begin_mouse_pan", level = "trace", skip_all)]
     pub fn begin_mouse_pan(&mut self) {
         self.pan_enabled = true;
     }
 
-    #[instrument(name = "State::end_mouse_pan", skip_all)]
+    #[instrument(name = "State::end_mouse_pan", level = "trace", skip_all)]
     pub fn end_mouse_pan(&mut self) {
         self.pan_enabled = false;
     }
@@ -182,15 +182,12 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 if button != MouseButton::Left {
                     return;
                 }
-                let Some(state) = &mut self.state else { return };
                 match button_state {
                     ElementState::Pressed => state.begin_mouse_pan(),
                     ElementState::Released => state.end_mouse_pan(),
                 }
             }
             WindowEvent::CursorMoved { device_id: _, position } => {
-                let Some(state) = &mut self.state else { return };
-
                 state.update_mouse_position((position.x, position.y));
             }
             _ => {}
