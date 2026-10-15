@@ -65,7 +65,7 @@ jobs:
       WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
     steps:
       - if: env.WINGET_TOKEN != ''
-        uses: vedantmgoyal9/winget-releaser@main
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
         with:
           identifier: DanielMauderer.MerleView
           installers-regex: '^merle-view-x86_64-pc-windows-msvc\.exe$'
@@ -73,7 +73,8 @@ jobs:
 
   crates-io:
     name: Publish to crates.io
-    needs: version
+    # crates.io versions are permanent: only publish once every build passed.
+    needs: [windows, nix]
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
