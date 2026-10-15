@@ -54,7 +54,7 @@ struct ImageUniform {
 
 impl ImageUniform {
     #[instrument(name = "ImageUniform::new", level = "trace")]
-    #[expect(clippy::cast_possible_truncation, reason = "GPU needs f32 values are in NDC range")]
+    #[expect(clippy::cast_possible_truncation, reason = "GPU needs f32 values")]
     fn new(target: (u32, u32), image: (u32, u32), zoom: f64, center: (f64, f64)) -> Self {
         let scale = aspect_scale(target, image);
         Self {
