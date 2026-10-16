@@ -24,7 +24,7 @@ pub struct MerleLoader {
 impl MerleLoader {
     #[must_use]
     pub fn new(base_dir: &str, cb: impl Fn(MerleImage) + Send + 'static) -> Self {
-        let path = Path::new(&base_dir);
+        let _path = Path::new(&base_dir);
         Self { base_dir: String::from(base_dir), file_index: 0, cb: Box::new(cb) }
     }
 
