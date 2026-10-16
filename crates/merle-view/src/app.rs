@@ -95,6 +95,7 @@ impl State {
     }
 }
 
+#[derive(Debug)]
 pub struct App {
     state: Option<State>,
     loader: MerleLoader,
@@ -103,6 +104,7 @@ pub struct App {
 }
 
 impl App {
+    #[must_use]
     pub fn new(loader: MerleLoader) -> Self {
         Self { state: None, loader, pending: None, error: None }
     }
@@ -174,8 +176,16 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 (KeyCode::KeyD, true) => state.move_relative((-0.1, 0.0)),
                 (KeyCode::KeyR, true) => state.reset(),
                 (KeyCode::KeyC, true) => state.center(),
-                (KeyCode::ArrowRight, true) => self.loader.next().unwrap(),
-                (KeyCode::ArrowLeft, true) => self.loader.prev().unwrap(),
+                (KeyCode::ArrowRight, true) => {
+                    if let Err(err) = self.loader.load_next() {
+                        self.fail(event_loop, err.into());
+                    }
+                }
+                (KeyCode::ArrowLeft, true) => {
+                    if let Err(err) = self.loader.load_prev() {
+                        self.fail(event_loop, err.into());
+                    }
+                }
                 _ => (),
             },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {

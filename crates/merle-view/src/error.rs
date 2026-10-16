@@ -1,25 +1,31 @@
+use merle_loader::LoaderError;
 use merle_photo::PhotoError;
 use std::error::Error as StdError;
 use std::fmt;
+use std::path::PathBuf;
 use winit::error::{EventLoopError, OsError};
 
 #[derive(Debug)]
 pub enum Error {
     Usage,
+    NoFileName(PathBuf),
     EventLoop(EventLoopError),
     CreateWindow(OsError),
     Gpu(GpuError),
     Photo(PhotoError),
+    Loader(LoaderError),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Usage => f.write_str("usage: merle-view <image path>"),
+            Self::NoFileName(path) => write!(f, "{} does not name an image file", path.display()),
             Self::EventLoop(_) => f.write_str("event loop failed"),
             Self::CreateWindow(_) => f.write_str("cannot create window"),
             Self::Gpu(err) => err.fmt(f),
             Self::Photo(err) => err.fmt(f),
+            Self::Loader(err) => err.fmt(f),
         }
     }
 }
@@ -27,11 +33,12 @@ impl fmt::Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
-            Self::Usage => None,
+            Self::Usage | Self::NoFileName(_) => None,
             Self::EventLoop(err) => Some(err),
             Self::CreateWindow(err) => Some(err),
             Self::Gpu(err) => err.source(),
             Self::Photo(err) => err.source(),
+            Self::Loader(err) => err.source(),
         }
     }
 }
@@ -57,6 +64,12 @@ impl From<GpuError> for Error {
 impl From<PhotoError> for Error {
     fn from(err: PhotoError) -> Self {
         Self::Photo(err)
+    }
+}
+
+impl From<LoaderError> for Error {
+    fn from(err: LoaderError) -> Self {
+        Self::Loader(err)
     }
 }
 

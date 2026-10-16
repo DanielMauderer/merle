@@ -8,53 +8,48 @@
 //! Placeholder: no functionality yet.
 mod error;
 
+use std::ffi::OsStr;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use merle_photo::MerleImage;
 use tracing::info;
 
-use crate::error::LoaderError;
+pub use crate::error::LoaderError;
 
 pub struct MerleLoader {
-    base_dir: String,
+    base_dir: PathBuf,
     file_index: usize,
     cb: Box<dyn Fn(MerleImage) + Send>,
 }
 
+impl fmt::Debug for MerleLoader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MerleLoader")
+            .field("base_dir", &self.base_dir)
+            .field("file_index", &self.file_index)
+            .finish_non_exhaustive()
+    }
+}
+
 impl MerleLoader {
     #[must_use]
-    pub fn new(base_dir: &str, cb: impl Fn(MerleImage) + Send + 'static) -> Self {
-        let _path = Path::new(&base_dir);
-        Self { base_dir: String::from(base_dir), file_index: 0, cb: Box::new(cb) }
+    pub fn new(base_dir: PathBuf, cb: impl Fn(MerleImage) + Send + 'static) -> Self {
+        Self { base_dir, file_index: 0, cb: Box::new(cb) }
     }
 
-    pub fn load_image(&mut self, name: &str) -> Result<(), LoaderError> {
-        let b_path = PathBuf::from(&self.base_dir);
+    pub fn load_image(&mut self, name: &OsStr) -> Result<(), LoaderError> {
+        let mut path = self.base_dir.clone();
+        path.push(name);
 
-        let file_index = b_path
-            .read_dir()
-            .unwrap()
-            .into_iter()
-            .position(|f| {
-                if let Ok(fle) = f {
-                    return fle.file_name() == name;
-                }
-                false
-            })
-            .unwrap();
-
-        self.file_index = file_index;
-
-        let files = self.entries();
-        if files.is_empty() {
-            return Ok(());
-        }
-        self.show(&files)?;
-
-        Ok(())
+        let files = self.entries()?;
+        self.file_index =
+            files.iter().position(|f| *f == path).ok_or(LoaderError::NotInDirectory { path })?;
+        self.show(&files)
     }
-    pub fn next(&mut self) -> Result<(), LoaderError> {
-        let files = self.entries();
+
+    pub fn load_next(&mut self) -> Result<(), LoaderError> {
+        let files = self.entries()?;
         if files.is_empty() {
             return Ok(());
         }
@@ -62,29 +57,30 @@ impl MerleLoader {
         self.show(&files)
     }
 
-    pub fn prev(&mut self) -> Result<(), LoaderError> {
-        let files = self.entries();
+    pub fn load_prev(&mut self) -> Result<(), LoaderError> {
+        let files = self.entries()?;
         if files.is_empty() {
             return Ok(());
         }
         self.file_index = (self.file_index + files.len() - 1) % files.len();
         self.show(&files)
     }
-    fn entries(&self) -> Vec<PathBuf> {
-        let mut files: Vec<PathBuf> = std::fs::read_dir(&self.base_dir)
-            .map(|rd| {
-                rd.filter_map(Result::ok)
-                    .map(|e| e.path())
-                    .filter(|p| p.is_file() && is_raw(p))
-                    .collect()
-            })
-            .unwrap_or_default();
+
+    fn entries(&self) -> Result<Vec<PathBuf>, LoaderError> {
+        let read_dir = std::fs::read_dir(&self.base_dir)
+            .map_err(|source| LoaderError::ReadDir { path: self.base_dir.clone(), source })?;
+        let mut files: Vec<PathBuf> = read_dir
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && is_raw(p))
+            .collect();
         files.sort();
-        files
+        Ok(files)
     }
+
     fn show(&mut self, files: &[PathBuf]) -> Result<(), LoaderError> {
         let path = &files[self.file_index];
-        info!("path: {}", path.to_str().unwrap());
+        info!("path: {}", path.display());
         (self.cb)(MerleImage::open(path).map(MerleImage::into_rgba8).map_err(|source| {
             LoaderError::LoadImage { path: path.clone(), source: Box::new(source) }
         })?);

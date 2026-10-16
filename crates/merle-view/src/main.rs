@@ -9,7 +9,9 @@
 use merle_loader::MerleLoader;
 use merle_photo::{MerleImage, PhotoError};
 use std::env;
+use std::ffi::OsStr;
 use std::iter;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -57,19 +59,27 @@ fn main() -> ExitCode {
 
 fn start_app() -> Result<(), Error> {
     let mut args = env::args_os().skip(1);
-    let (Some(from), Some(dir), None) = (args.next(), args.next(), args.next()) else {
+    let (Some(path), None) = (args.next(), args.next()) else {
         return Err(Error::Usage);
     };
+    let mut dir = PathBuf::from(path);
+    let Some(name) = dir.file_name().map(OsStr::to_os_string) else {
+        return Err(Error::NoFileName(dir));
+    };
+    dir.pop();
+    if dir.as_os_str().is_empty() {
+        dir.push(".");
+    }
+
     let event_loop = EventLoop::<Result<MerleImage, PhotoError>>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
-    let proxy_1 = event_loop.create_proxy();
-    let _proxy_2 = event_loop.create_proxy();
+    let proxy = event_loop.create_proxy();
 
-    let mut loader = MerleLoader::new(&dir.to_str().unwrap(), move |image| {
-        proxy_1.send_event(Ok(image));
+    let mut loader = MerleLoader::new(dir, move |image| {
+        let _ = proxy.send_event(Ok(image));
     });
 
-    loader.load_image(&from.to_str().unwrap());
+    loader.load_image(&name)?;
 
     let mut app = app::App::new(loader);
     info!("entering event loop");
