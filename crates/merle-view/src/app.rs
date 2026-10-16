@@ -8,7 +8,6 @@ use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
 use tracing::instrument;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
-use winit::event_loop::EventLoopProxy;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},

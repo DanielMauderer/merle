@@ -10,9 +10,7 @@ use merle_loader::MerleLoader;
 use merle_photo::{MerleImage, PhotoError};
 use std::env;
 use std::iter;
-use std::path::Path;
 use std::process::ExitCode;
-use std::thread;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -65,7 +63,7 @@ fn start_app() -> Result<(), Error> {
     let event_loop = EventLoop::<Result<MerleImage, PhotoError>>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy_1 = event_loop.create_proxy();
-    let proxy_2 = event_loop.create_proxy();
+    let _proxy_2 = event_loop.create_proxy();
 
     let mut loader = MerleLoader::new(&dir.to_str().unwrap(), move |image| {
         proxy_1.send_event(Ok(image));
