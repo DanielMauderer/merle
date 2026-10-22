@@ -24,6 +24,7 @@ pub mod app;
 pub mod error;
 pub mod gpu;
 pub mod image_view;
+pub mod input;
 pub mod viewport;
 
 fn init_tracing() {

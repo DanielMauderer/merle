@@ -1,6 +1,7 @@
 use crate::error::{Error, GpuError};
 use crate::gpu::Gpu;
 use crate::image_view::ImageView;
+use crate::input::Pointer;
 use crate::viewport::Viewport;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
@@ -19,8 +20,7 @@ pub struct State {
     window: Arc<Window>,
     gpu: Gpu,
     image_view: ImageView,
-    pan_enabled: bool,
-    cursor_position: (f64, f64),
+    pointer: Pointer,
     viewport: Viewport,
 }
 
@@ -35,22 +35,19 @@ impl State {
             window,
             gpu,
             image_view,
-            pan_enabled: false,
-            cursor_position: (0.0, 0.0),
+            pointer: Pointer::default(),
             viewport: Viewport::default(),
         };
         state.resize(size.width, size.height);
         Ok(state)
     }
 
-    #[instrument(name = "State::begin_mouse_pan", level = "trace", skip_all)]
     pub fn begin_mouse_pan(&mut self) {
-        self.pan_enabled = true;
+        self.pointer.press();
     }
 
-    #[instrument(name = "State::end_mouse_pan", level = "trace", skip_all)]
     pub fn end_mouse_pan(&mut self) {
-        self.pan_enabled = false;
+        self.pointer.release();
     }
 
     pub fn set_image(&mut self, image: &MerleImage) {
@@ -70,7 +67,7 @@ impl State {
     }
 
     pub fn zoom(&mut self, delta: f64) {
-        self.viewport.zoom(delta);
+        self.viewport.zoom(delta, self.pointer.position());
         self.window.request_redraw();
     }
 
@@ -90,12 +87,10 @@ impl State {
     }
 
     pub fn update_mouse_position(&mut self, pixels: (f64, f64)) {
-        if self.pan_enabled {
-            let delta = (pixels.0 - self.cursor_position.0, pixels.1 - self.cursor_position.1);
+        if let Some(delta) = self.pointer.moved(pixels) {
             self.viewport.move_pixel(delta);
             self.window.request_redraw();
         }
-        self.cursor_position = pixels;
     }
 }
 

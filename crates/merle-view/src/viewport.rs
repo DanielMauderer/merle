@@ -26,7 +26,7 @@ impl Viewport {
 
     #[instrument(level = "trace", skip(self,))]
     pub fn move_pixel(&mut self, pixels: (f64, f64)) {
-        let aspect = pixel_to_relative(self.target_size);
+        let aspect = pixel_to_windows(self.target_size);
         let delta = (pixels.0 * aspect.0, -pixels.1 * aspect.1);
         self.move_relative(delta);
     }
@@ -37,12 +37,37 @@ impl Viewport {
         self.center.1 += delta.1;
     }
 
+    #[instrument(level = "trace", skip(self,))]
+    pub fn move_to_pixel(&mut self, pixels: (f64, f64)) {
+        let aspect = pixel_to_windows(self.target_size);
+        let delta = (pixels.0 * aspect.0, pixels.1 * aspect.1);
+        self.move_absolute(delta);
+    }
+
+    #[instrument(level = "trace", skip(self,))]
+    pub fn move_absolute(&mut self, delta: (f64, f64)) {
+        self.center.0 = delta.0;
+        self.center.1 = -delta.1;
+    }
+
     #[instrument(level = "trace", skip(self))]
-    pub fn zoom(&mut self, delta: f64) {
+    pub fn zoom(&mut self, delta: f64, zoom_point: (f64, f64)) {
         let lower_limit = 0.5;
         let upper_limit = 10.0;
+        let old_zoom = self.zoom;
         self.zoom = (self.zoom + delta * 0.1).clamp(lower_limit, upper_limit);
 
+        if self.zoom <= lower_limit {
+            self.center.0 = 0.0;
+            self.center.1 = 0.0;
+            return;
+        }
+        let aspect = pixel_to_windows(self.target_size);
+        let point = (zoom_point.0 * aspect.0 - 1.0, 1.0 - zoom_point.1 * aspect.1);
+
+        let factor = self.zoom / old_zoom;
+        self.center.0 = point.0 - (point.0 - self.center.0) * factor;
+        self.center.1 = point.1 - (point.1 - self.center.1) * factor;
         trace!(self.zoom, "scale");
     }
 }
@@ -53,6 +78,6 @@ impl Default for Viewport {
     }
 }
 
-fn pixel_to_relative((win_w, win_h): (u32, u32)) -> (f64, f64) {
+fn pixel_to_windows((win_w, win_h): (u32, u32)) -> (f64, f64) {
     (2.0 / f64::from(win_w), 2.0 / f64::from(win_h))
 }
