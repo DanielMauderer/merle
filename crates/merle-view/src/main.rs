@@ -24,6 +24,7 @@ pub mod app;
 pub mod error;
 pub mod gpu;
 pub mod image_view;
+pub mod viewport;
 
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {

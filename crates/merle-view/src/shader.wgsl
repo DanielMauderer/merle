@@ -12,7 +12,8 @@ struct VertexOutput {
 
 struct ImageUniform {
     scale: vec2<f32>,
-    zoom: vec2<f32>,
+    zoom: f32,
+    _pad: f32,
     center: vec2<f32>,
 };
 
