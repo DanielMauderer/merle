@@ -6,12 +6,13 @@
 // any later version. See the LICENSE-GPL file for the full text.
 
 //! Minimal image viewer.
+use merle_loader::MerleLoader;
 use merle_photo::{MerleImage, PhotoError};
 use std::env;
+use std::ffi::OsStr;
 use std::iter;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::ExitCode;
-use std::thread;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -58,17 +59,29 @@ fn main() -> ExitCode {
 
 fn start_app() -> Result<(), Error> {
     let mut args = env::args_os().skip(1);
-    let (Some(from), None) = (args.next(), args.next()) else { return Err(Error::Usage) };
+    let (Some(path), None) = (args.next(), args.next()) else {
+        return Err(Error::Usage);
+    };
+    let mut dir = PathBuf::from(path);
+    let Some(name) = dir.file_name().map(OsStr::to_os_string) else {
+        return Err(Error::NoFileName(dir));
+    };
+    dir.pop();
+    if dir.as_os_str().is_empty() {
+        dir.push(".");
+    }
+
     let event_loop = EventLoop::<Result<MerleImage, PhotoError>>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
-
     let proxy = event_loop.create_proxy();
-    thread::spawn(move || {
-        let image = MerleImage::open(Path::new(&from)).map(MerleImage::into_rgba8);
-        let _ = proxy.send_event(image);
+
+    let mut loader = MerleLoader::new(dir, move |image| {
+        let _ = proxy.send_event(Ok(image));
     });
 
-    let mut app = app::App::default();
+    loader.load_image(&name)?;
+
+    let mut app = app::App::new(loader);
     info!("entering event loop");
     event_loop.run_app(&mut app)?;
     app.take_error().map_or(Ok(()), Err)

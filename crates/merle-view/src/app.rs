@@ -3,6 +3,7 @@ use crate::gpu::Gpu;
 use crate::image_view::ImageView;
 use crate::input::Pointer;
 use crate::viewport::Viewport;
+use merle_loader::MerleLoader;
 use merle_photo::{MerleImage, PhotoError};
 use std::sync::Arc;
 use tracing::instrument;
@@ -94,14 +95,19 @@ impl State {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct App {
     state: Option<State>,
+    loader: MerleLoader,
     pending: Option<MerleImage>,
     error: Option<Error>,
 }
 
 impl App {
+    #[must_use]
+    pub fn new(loader: MerleLoader) -> Self {
+        Self { state: None, loader, pending: None, error: None }
+    }
     pub fn take_error(&mut self) -> Option<Error> {
         self.error.take()
     }
@@ -170,6 +176,16 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 (KeyCode::KeyD, true) => state.move_relative((-0.1, 0.0)),
                 (KeyCode::KeyR, true) => state.reset(),
                 (KeyCode::KeyC, true) => state.center(),
+                (KeyCode::ArrowRight, true) => {
+                    if let Err(err) = self.loader.load_next() {
+                        self.fail(event_loop, err.into());
+                    }
+                }
+                (KeyCode::ArrowLeft, true) => {
+                    if let Err(err) = self.loader.load_prev() {
+                        self.fail(event_loop, err.into());
+                    }
+                }
                 _ => (),
             },
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
@@ -189,7 +205,7 @@ impl ApplicationHandler<Result<MerleImage, PhotoError>> for App {
                 }
             }
             WindowEvent::CursorMoved { device_id: _, position } => {
-                state.update_mouse_position((position.x, position.y));
+                state.update_mouse_position(position.into());
             }
             _ => {}
         }

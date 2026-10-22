@@ -7,6 +7,7 @@
 //! caching.
 //!
 //! Placeholder: no functionality yet.
+
 pub use crate::error::PhotoError;
 use image::{DynamicImage, GenericImageView, RgbaImage};
 use std::borrow::Cow;
