@@ -41,11 +41,11 @@ impl Viewport {
     pub fn move_to_pixel(&mut self, pixels: (f64, f64)) {
         let aspect = pixel_to_windows(self.target_size);
         let delta = (pixels.0 * aspect.0, pixels.1 * aspect.1);
-        self.move_absolut(delta);
+        self.move_absolute(delta);
     }
 
     #[instrument(level = "trace", skip(self,))]
-    pub fn move_absolut(&mut self, delta: (f64, f64)) {
+    pub fn move_absolute(&mut self, delta: (f64, f64)) {
         self.center.0 = delta.0;
         self.center.1 = -delta.1;
     }
