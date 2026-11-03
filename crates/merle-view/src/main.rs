@@ -75,7 +75,7 @@ fn start_app() -> Result<(), Error> {
     event_loop.set_control_flow(ControlFlow::Wait);
     let proxy = event_loop.create_proxy();
 
-    let loader = MerleLoader::new_start_image(1, dir, &name, move |image| {
+    let loader = MerleLoader::new_start_image(6, dir, &name, move |image| {
         let _ = proxy.send_event(Ok(image.clone()));
     })?;
 

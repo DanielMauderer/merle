@@ -9,7 +9,7 @@ use crate::LoaderError;
 use crate::cache::MerleCache;
 
 pub struct MerleLoader {
-    preload: u32,
+    preload: usize,
     base_dir: PathBuf,
     file_index: usize,
     cache: MerleCache,
@@ -27,12 +27,12 @@ impl fmt::Debug for MerleLoader {
 
 impl MerleLoader {
     #[must_use]
-    pub fn new(preload: u32, base_dir: PathBuf, cb: impl Fn(&MerleImage) + Send + 'static) -> Self {
-        Self { preload, base_dir, file_index: 0,cache: MerleCache::new(), cb: Box::new(cb) }
+    pub fn new(preload: usize, base_dir: PathBuf, cb: impl Fn(&MerleImage) + Send + 'static) -> Self {
+        Self { preload, base_dir, file_index: 0,cache: MerleCache::new(preload), cb: Box::new(cb) }
     }
 
     pub fn new_start_image(
-        preload: u32,
+        preload: usize,
         base_dir: PathBuf,
         name: &OsStr,
         cb: impl Fn(&MerleImage) + Send + 'static,
