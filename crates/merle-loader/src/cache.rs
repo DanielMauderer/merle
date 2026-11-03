@@ -10,16 +10,16 @@ use merle_photo::MerleImage;
 
 use crate::LoaderError;
 
-pub struct MerleCache {
+pub(crate) struct MerleCache {
     loaded_items: HashMap<String, MerleImage>,
 }
 
 impl MerleCache {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { loaded_items: HashMap::new() }
     }
 
-    pub fn request(&mut self, path: &PathBuf) -> Result<&MerleImage, LoaderError> {
+    pub(crate) fn request(&mut self, path: &PathBuf) -> Result<&MerleImage, LoaderError> {
         let key = String::from(path.as_path().to_str().unwrap());
 
         let a = match self.loaded_items.entry(key) {
