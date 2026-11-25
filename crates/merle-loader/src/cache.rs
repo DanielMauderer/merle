@@ -1,11 +1,4 @@
-use std::{
-    collections::{
-        HashMap,
-        hash_map::Entry::{Occupied, Vacant},
-    },
-    num::NonZeroUsize,
-    path::PathBuf,
-};
+use std::{num::NonZeroUsize, path::PathBuf};
 
 use lru::LruCache;
 use merle_photo::MerleImage;
@@ -18,16 +11,16 @@ pub(crate) struct MerleCache {
 }
 
 impl MerleCache {
-    pub(crate) fn new(preload: usize) -> Self {
-        Self { loaded_items: LruCache::new(NonZeroUsize::new(preload).unwrap()) }
+    pub(crate) fn new(cache_size: usize) -> Self {
+        Self { loaded_items: LruCache::new(NonZeroUsize::new(cache_size).unwrap()) }
     }
 
-    pub(crate) fn request(&mut self, path: &PathBuf) -> Result<&MerleImage, LoaderError> {
-        let key = String::from(path.as_path().to_str().unwrap());
+    pub(crate) fn request(&mut self, path_buf: &PathBuf) -> Result<&MerleImage, LoaderError> {
+        let key = String::from(path_buf.as_path().to_str().expect("dont use names like this"));
         let f = || -> Result<MerleImage, LoaderError> {
             info!("!!!CACHEMISS");
-            MerleImage::open(path).map(MerleImage::into_rgba8).map_err(|source| {
-                LoaderError::LoadImage { path: path.clone(), source: Box::new(source) }
+            MerleImage::open(path_buf).map(MerleImage::into_rgba8).map_err(|source| {
+                LoaderError::LoadImage { path: path_buf.clone(), source: Box::new(source) }
             })
         };
 

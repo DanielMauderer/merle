@@ -9,7 +9,7 @@ use crate::LoaderError;
 use crate::cache::MerleCache;
 
 pub struct MerleLoader {
-    preload: usize,
+    look_ahead_count: usize,
     base_dir: PathBuf,
     file_index: usize,
     cache: MerleCache,
@@ -27,8 +27,19 @@ impl fmt::Debug for MerleLoader {
 
 impl MerleLoader {
     #[must_use]
-    pub fn new(preload: usize, base_dir: PathBuf, cb: impl Fn(&MerleImage) + Send + 'static) -> Self {
-        Self { preload, base_dir, file_index: 0,cache: MerleCache::new(preload), cb: Box::new(cb) }
+    pub fn new(
+        look_ahead_count: usize,
+        base_dir: PathBuf,
+        cb: impl Fn(&MerleImage) + Send + 'static,
+    ) -> Self {
+        Self {
+            look_ahead_count,
+            base_dir,
+            file_index: 0,
+            // look ahead in both direction plus 1 for ether direction and the current image
+            cache: MerleCache::new(look_ahead_count * 2 + 3),
+            cb: Box::new(cb),
+        }
     }
 
     pub fn new_start_image(
